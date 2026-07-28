@@ -297,24 +297,48 @@ export default function App() {
   const [targetDana, setTargetDana] = useState("");
   const [tersimpan, setTersimpan] = useState(false);
   const [activeTab, setActiveTab] = useState("dashboard");
+  // Pagu kustom — memungkinkan pengaju mengganti sendiri nilai pagu hibah
+  // (mis. skema internal kampus / mitra dengan plafon berbeda dari acuan default).
+  const [paguKustom, setPaguKustom] = useState(initialDraft?.paguKustom ?? false);
+  const [paguMinKustom, setPaguMinKustom] = useState(
+    initialDraft?.paguMinKustom ?? String((SKEMA.find((s) => s.id === (initialDraft?.skemaId || "pfr")) || SKEMA[0]).paguMin)
+  );
+  const [paguMaxKustom, setPaguMaxKustom] = useState(
+    initialDraft?.paguMaxKustom ?? String((SKEMA.find((s) => s.id === (initialDraft?.skemaId || "pfr")) || SKEMA[0]).paguMax)
+  );
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ skemaId, items, progStudi, namaKetua }));
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ skemaId, items, progStudi, namaKetua, paguKustom, paguMinKustom, paguMaxKustom }));
       setTersimpan(true);
       const t = setTimeout(() => setTersimpan(false), 1500);
       return () => clearTimeout(t);
     } catch {
       /* localStorage tidak tersedia — abaikan */
     }
-  }, [skemaId, items, progStudi, namaKetua]);
+  }, [skemaId, items, progStudi, namaKetua, paguKustom, paguMinKustom, paguMaxKustom]);
 
   const skema = useMemo(() => SKEMA.find((s) => s.id === skemaId), [skemaId]);
   const sumber = SUMBER[skema.sumber];
 
+  // Pagu efektif yang benar-benar dipakai di seluruh validasi/rekomendasi/cetak:
+  // pagu bawaan skema, atau nilai kustom bila pengaju mengaktifkannya.
+  const pagu = useMemo(() => {
+    if (!paguKustom) return { min: skema.paguMin, max: skema.paguMax };
+    const min = Number(paguMinKustom);
+    const max = Number(paguMaxKustom);
+    return {
+      min: Number.isFinite(min) && min >= 0 ? min : skema.paguMin,
+      max: Number.isFinite(max) && max > 0 ? max : skema.paguMax,
+    };
+  }, [paguKustom, paguMinKustom, paguMaxKustom, skema]);
+
   const gantiSkema = (id) => {
     setSkemaId(id);
     setItems(buildDefaultItems(id));
+    const s = SKEMA.find((x) => x.id === id);
+    setPaguMinKustom(String(s.paguMin));
+    setPaguMaxKustom(String(s.paguMax));
   };
 
   const subtotal = useMemo(() => {
@@ -483,16 +507,16 @@ export default function App() {
     const b = skema.batas;
     if (total <= 0) return issues;
 
-    if (total < skema.paguMin - 1e-6) {
+    if (total < pagu.min - 1e-6) {
       issues.push({
         level: "warn",
-        msg: `Total RAB ${rupiah(total)} masih di bawah pagu minimum skema (${rupiah(skema.paguMin)}).`,
+        msg: `Total RAB ${rupiah(total)} masih di bawah pagu minimum ${paguKustom ? "kustom" : "skema"} (${rupiah(pagu.min)}).`,
       });
     }
-    if (total > skema.paguMax + 1e-6) {
+    if (total > pagu.max + 1e-6) {
       issues.push({
         level: "error",
-        msg: `Total RAB ${rupiah(total)} melebihi pagu maksimum skema (${rupiah(skema.paguMax)}). Kurangi ${rupiah(total - skema.paguMax)}.`,
+        msg: `Total RAB ${rupiah(total)} melebihi pagu maksimum ${paguKustom ? "kustom" : "skema"} (${rupiah(pagu.max)}). Kurangi ${rupiah(total - pagu.max)}.`,
       });
     }
 
@@ -551,7 +575,7 @@ export default function App() {
     }
 
     return issues;
-  }, [subtotal, total, habisPakai, skema, items]);
+  }, [subtotal, total, habisPakai, skema, items, pagu, paguKustom]);
 
   const skorRealistis = useMemo(() => {
     let skor = 100;
@@ -568,8 +592,8 @@ export default function App() {
     const b = skema.batas;
     const NAMA = (id) => (CATEGORIES.find((c) => c.id === id)?.title || id).replace(/^\d+\.\s*/, "");
 
-    if (total > skema.paguMax + 1e-6) {
-      const excess = total - skema.paguMax;
+    if (total > pagu.max + 1e-6) {
+      const excess = total - pagu.max;
       let sisa = excess;
       for (const catId of ["peralatan", "perjalanan", "sewa"]) {
         if (sisa <= 0) break;
@@ -578,7 +602,7 @@ export default function App() {
           recs.push({
             id: `cut-${catId}`, level: "error",
             title: `Pangkas ${NAMA(catId)} sebesar ${rupiah(potong)}`,
-            detail: `Total RAB melebihi pagu maksimum ${rupiah(skema.paguMax)} sejumlah ${rupiah(excess)}. Mengurangi ${NAMA(catId)} membantu kembali ke dalam pagu.`,
+            detail: `Total RAB melebihi pagu maksimum ${rupiah(pagu.max)} sejumlah ${rupiah(excess)}. Mengurangi ${NAMA(catId)} membantu kembali ke dalam pagu.`,
             catId, delta: -potong,
           });
           sisa -= potong;
@@ -593,14 +617,14 @@ export default function App() {
       }
     }
 
-    if (total < skema.paguMin - 1e-6) {
-      const kurang = skema.paguMin - total;
+    if (total < pagu.min - 1e-6) {
+      const kurang = pagu.min - total;
       const keBahan = Math.round(kurang * 0.6);
       const keData = kurang - keBahan;
       recs.push({
         id: "add-bahan-min", level: "warn",
         title: `Tambah Belanja Bahan Penelitian sebesar ${rupiah(keBahan)}`,
-        detail: `Total RAB ${rupiah(total)} masih di bawah pagu minimum ${rupiah(skema.paguMin)}. Menambah dana habis pakai lebih aman di mata reviewer dibanding menambah honor/aset.`,
+        detail: `Total RAB ${rupiah(total)} masih di bawah pagu minimum ${rupiah(pagu.min)}. Menambah dana habis pakai lebih aman di mata reviewer dibanding menambah honor/aset.`,
         catId: "bahan", delta: keBahan,
       });
       if (keData > 1000) {
@@ -703,7 +727,7 @@ export default function App() {
     }
 
     return recs;
-  }, [subtotal, total, habisPakai, skema, items, skemaId]);
+  }, [subtotal, total, habisPakai, skema, items, skemaId, pagu]);
 
   // Menerapkan penyesuaian rupiah dari rekomendasi AI ke item RAB.
   // Penambahan disisipkan sebagai baris baru; pengurangan memangkas item bernilai
@@ -819,31 +843,57 @@ export default function App() {
       {/* Header */}
       <header style={{
         position: "relative", overflow: "hidden",
-        background: `radial-gradient(circle at 12% 18%, rgba(255,255,255,.14), transparent 55%), linear-gradient(120deg, ${sumber.warna} 0%, ${sumber.warna}dd 100%)`,
-        color: "#FBF8F2", padding: "38px 28px 46px",
-        boxShadow: "0 12px 32px rgba(0,0,0,.14)",
+        background: `
+          radial-gradient(circle at 85% -10%, rgba(255,255,255,.16), transparent 45%),
+          radial-gradient(circle at 8% 110%, rgba(0,0,0,.18), transparent 50%),
+          linear-gradient(135deg, ${sumber.warna} 0%, ${sumber.warna}E6 55%, ${sumber.warna}CC 100%)
+        `,
+        color: "#FBF8F2", padding: "44px 28px 52px",
+        boxShadow: "0 18px 44px rgba(0,0,0,.22)",
       }}>
+        {/* Watermark dekoratif — motif cincin monogram premium, tidak mengganggu keterbacaan */}
+        <div aria-hidden="true" style={{
+          position: "absolute", top: -60, right: -40, width: 280, height: 280, borderRadius: "50%",
+          border: "1px solid rgba(255,255,255,.14)", pointerEvents: "none",
+        }} />
+        <div aria-hidden="true" style={{
+          position: "absolute", top: -20, right: 20, width: 180, height: 180, borderRadius: "50%",
+          border: "1px solid rgba(255,255,255,.10)", pointerEvents: "none",
+        }} />
+        <div aria-hidden="true" style={{
+          position: "absolute", inset: 0,
+          backgroundImage: "radial-gradient(rgba(255,255,255,.10) 1px, transparent 1px)",
+          backgroundSize: "18px 18px", opacity: .35, pointerEvents: "none",
+          maskImage: "linear-gradient(180deg, rgba(0,0,0,.6), transparent 75%)",
+          WebkitMaskImage: "linear-gradient(180deg, rgba(0,0,0,.6), transparent 75%)",
+        }} />
         <div style={{
           position: "absolute", left: 0, right: 0, bottom: 0, height: 3,
-          background: "linear-gradient(90deg, transparent, #E8C97A, #FBF8F2, #E8C97A, transparent)", opacity: .8,
+          background: "linear-gradient(90deg, transparent, #E8C97A, #FBF8F2, #E8C97A, transparent)", opacity: .85,
         }} />
-        <div style={{ maxWidth: 1080, margin: "0 auto" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
+        <div style={{ position: "relative", maxWidth: 1080, margin: "0 auto" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6 }}>
             <span style={{
-              width: 38, height: 38, borderRadius: 11, background: "rgba(255,255,255,.14)",
-              border: "1px solid rgba(255,255,255,.28)", display: "flex", alignItems: "center", justifyContent: "center",
-              fontFamily: "'Fraunces'", fontWeight: 700, fontSize: 15, letterSpacing: .5, flexShrink: 0,
+              width: 42, height: 42, borderRadius: 12, background: "linear-gradient(150deg, rgba(255,255,255,.22), rgba(255,255,255,.06))",
+              border: "1px solid rgba(255,255,255,.32)", display: "flex", alignItems: "center", justifyContent: "center",
+              fontFamily: "'Fraunces'", fontWeight: 700, fontSize: 16, letterSpacing: .5, flexShrink: 0,
+              boxShadow: "0 6px 16px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.25)",
             }}>RB</span>
-            <div style={{ fontFamily: "'DM Sans'", fontSize: 12, letterSpacing: 3, textTransform: "uppercase", opacity: .85, fontWeight: 600 }}>
-              Sistem Penyusun RAB · Prodi Teknik Informatika ITB Asia
+            <div style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: "'DM Sans'", fontSize: 12, letterSpacing: 3, textTransform: "uppercase", opacity: .9, fontWeight: 600 }}>
+              <span>Sistem Penyusun RAB</span>
+              <span style={{ width: 3, height: 3, borderRadius: "50%", background: "currentColor", opacity: .7 }} />
+              <span style={{ opacity: .8 }}>Prodi Teknik Informatika ITB Asia</span>
             </div>
           </div>
           <h1 style={{
-            fontFamily: "'Fraunces'", fontWeight: 600, fontSize: 42, margin: "8px 0 6px", lineHeight: 1.05, letterSpacing: -0.5,
+            fontFamily: "'Fraunces'", fontWeight: 600, fontSize: 44, margin: "10px 0 8px", lineHeight: 1.05, letterSpacing: -0.5,
+            backgroundImage: "linear-gradient(120deg, #FFFDF8 35%, #F1DDAE 65%, #FFFDF8 100%)",
+            WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent",
+            filter: "drop-shadow(0 2px 18px rgba(0,0,0,.16))",
           }}>
             Sistem RAB Hibah
           </h1>
-          <p style={{ margin: 0, maxWidth: 680, opacity: .92, fontSize: 15, lineHeight: 1.6 }}>
+          <p style={{ margin: 0, maxWidth: 660, opacity: .94, fontSize: 15, lineHeight: 1.65 }}>
             Susun Rencana Anggaran Biaya proposal hibah per komponen & item (mengikuti format resmi:
             Vol · Sat · Vol2 · Sat2 · Harga Satuan), lengkap dengan validasi batas komponen dan
             pemisahan dana habis pakai vs tidak habis pakai — agar anggaran lolos telaah reviewer.
@@ -864,7 +914,7 @@ export default function App() {
             <tr><td style={{ padding: "3px 6px", fontWeight: 600, width: 170 }}>Program Studi</td><td style={{ padding: "3px 6px" }}>: {progStudi || "-"}</td></tr>
             <tr><td style={{ padding: "3px 6px", fontWeight: 600 }}>Ketua Peneliti</td><td style={{ padding: "3px 6px" }}>: {namaKetua || "-"}</td></tr>
             <tr><td style={{ padding: "3px 6px", fontWeight: 600 }}>Skema Hibah</td><td style={{ padding: "3px 6px" }}>: {skema.nama}</td></tr>
-            <tr><td style={{ padding: "3px 6px", fontWeight: 600 }}>Pagu Skema</td><td style={{ padding: "3px 6px" }}>: {rupiah(skema.paguMin)} – {rupiah(skema.paguMax)}</td></tr>
+            <tr><td style={{ padding: "3px 6px", fontWeight: 600 }}>Pagu {paguKustom ? "Kustom" : "Skema"}</td><td style={{ padding: "3px 6px" }}>: {rupiah(pagu.min)} – {rupiah(pagu.max)}</td></tr>
             <tr><td style={{ padding: "3px 6px", fontWeight: 600 }}>Total Usulan RAB</td><td style={{ padding: "3px 6px", fontWeight: 700 }}>: {rupiah(total)}</td></tr>
           </tbody>
         </table>
@@ -913,6 +963,46 @@ export default function App() {
                   placeholder="................................" />
               </div>
             </div>
+          </div>
+
+          {/* Pagu kustom — pengaju bisa mengganti sendiri plafon hibah, mis. skema internal/mitra yang berbeda dari acuan default */}
+          <div className="no-print" style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid #F0EADF" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, fontWeight: 700, color: "#3A3226", cursor: "pointer" }}>
+                <input
+                  type="checkbox" checked={paguKustom}
+                  onChange={(e) => setPaguKustom(e.target.checked)}
+                  style={{ width: 16, height: 16, accentColor: sumber.warna, cursor: "pointer" }}
+                  aria-label="Gunakan pagu hibah kustom"
+                />
+                💰 Gunakan pagu hibah kustom
+              </label>
+              <span style={{ fontSize: 12, color: "#8A7A5C" }}>
+                Acuan skema: {rupiah(skema.paguMin)} – {rupiah(skema.paguMax)}
+              </span>
+            </div>
+            {paguKustom && (
+              <div className="grid-2col" style={{ marginTop: 12 }}>
+                <div>
+                  <label style={lbl} htmlFor="input-pagu-min">Pagu Minimum Diajukan (Rp)</label>
+                  <input
+                    id="input-pagu-min" className="num-input" type="number" min="0" step="1000000"
+                    style={{ ...inputText, width: "100%" }} value={paguMinKustom}
+                    onChange={(e) => setPaguMinKustom(e.target.value)}
+                    aria-label="Pagu minimum kustom (Rp)"
+                  />
+                </div>
+                <div>
+                  <label style={lbl} htmlFor="input-pagu-max">Pagu Maksimum Diajukan (Rp)</label>
+                  <input
+                    id="input-pagu-max" className="num-input" type="number" min="0" step="1000000"
+                    style={{ ...inputText, width: "100%" }} value={paguMaxKustom}
+                    onChange={(e) => setPaguMaxKustom(e.target.value)}
+                    aria-label="Pagu maksimum kustom (Rp)"
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </section>
 
@@ -1075,9 +1165,9 @@ export default function App() {
           }}>
             <div>
               <div style={{ fontWeight: 700, fontSize: 16 }}>TOTAL RENCANA ANGGARAN BIAYA</div>
-              <div style={{ fontSize: 12, color: total > skema.paguMax ? "#A23B23" : total < skema.paguMin ? "#B5820A" : "#1B5E4F", fontWeight: 600, marginTop: 2 }}>
-                Pagu skema {rupiah(skema.paguMin)} – {rupiah(skema.paguMax)}
-                {total > skema.paguMax ? " · melebihi pagu maksimum" : total < skema.paguMin ? " · di bawah pagu minimum" : " · dalam pagu"}
+              <div style={{ fontSize: 12, color: total > pagu.max ? "#A23B23" : total < pagu.min ? "#B5820A" : "#1B5E4F", fontWeight: 600, marginTop: 2 }}>
+                Pagu {paguKustom ? "kustom" : "skema"} {rupiah(pagu.min)} – {rupiah(pagu.max)}
+                {total > pagu.max ? " · melebihi pagu maksimum" : total < pagu.min ? " · di bawah pagu minimum" : " · dalam pagu"}
               </div>
             </div>
             <div style={{ fontFamily: "'Fraunces'", fontWeight: 700, fontSize: 26, color: sumber.warna }}>

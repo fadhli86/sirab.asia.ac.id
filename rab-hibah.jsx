@@ -291,7 +291,15 @@ const initialDraft = loadDraft();
 
 export default function App() {
   const [skemaId, setSkemaId] = useState(initialDraft?.skemaId || "pfr");
-  const [items, setItems] = useState(() => initialDraft?.items || buildDefaultItems(initialDraft?.skemaId || "pfr"));
+  // Model multi tahun — RAB disimpan per tahun pelaksanaan (itemsByTahun[i] = item satu tahun).
+  // Draft lama (single-year) tetap kompatibel: dibungkus jadi array 1 tahun.
+  const [jumlahTahun, setJumlahTahun] = useState(initialDraft?.jumlahTahun || 1);
+  const [itemsByTahun, setItemsByTahun] = useState(() => {
+    if (initialDraft?.itemsByTahun?.length) return initialDraft.itemsByTahun;
+    if (initialDraft?.items) return [initialDraft.items];
+    return [buildDefaultItems(initialDraft?.skemaId || "pfr")];
+  });
+  const [activeTahun, setActiveTahun] = useState(0);
   const [progStudi, setProgStudi] = useState(initialDraft?.progStudi ?? "Teknik Informatika – ITB Asia Malang");
   const [namaKetua, setNamaKetua] = useState(initialDraft?.namaKetua ?? "");
   const [targetDana, setTargetDana] = useState("");
@@ -309,20 +317,32 @@ export default function App() {
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ skemaId, items, progStudi, namaKetua, paguKustom, paguMinKustom, paguMaxKustom }));
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ skemaId, itemsByTahun, jumlahTahun, progStudi, namaKetua, paguKustom, paguMinKustom, paguMaxKustom }));
       setTersimpan(true);
       const t = setTimeout(() => setTersimpan(false), 1500);
       return () => clearTimeout(t);
     } catch {
       /* localStorage tidak tersedia — abaikan */
     }
-  }, [skemaId, items, progStudi, namaKetua, paguKustom, paguMinKustom, paguMaxKustom]);
+  }, [skemaId, itemsByTahun, jumlahTahun, progStudi, namaKetua, paguKustom, paguMinKustom, paguMaxKustom]);
 
   const skema = useMemo(() => SKEMA.find((s) => s.id === skemaId), [skemaId]);
   const sumber = SUMBER[skema.sumber];
 
+  // Item tahun yang sedang dilihat/diedit di tab Rincian Item, plus setter yang menyasar
+  // tahun tersebut saja — dipakai apa adanya oleh semua fungsi lama (updateItem, dst).
+  const items = itemsByTahun[activeTahun] || itemsByTahun[0];
+  const setItemsForYear = (yearIdx, updater) => {
+    setItemsByTahun((prev) => {
+      const next = [...prev];
+      next[yearIdx] = typeof updater === "function" ? updater(next[yearIdx]) : updater;
+      return next;
+    });
+  };
+  const setItems = (updater) => setItemsForYear(activeTahun, updater);
+
   // Pagu efektif yang benar-benar dipakai di seluruh validasi/rekomendasi/cetak:
-  // pagu bawaan skema, atau nilai kustom bila pengaju mengaktifkannya.
+  // pagu bawaan skema, atau nilai kustom bila pengaju mengaktifkannya. Berlaku per tahun.
   const pagu = useMemo(() => {
     if (!paguKustom) return { min: skema.paguMin, max: skema.paguMax };
     const min = Number(paguMinKustom);
@@ -335,24 +355,51 @@ export default function App() {
 
   const gantiSkema = (id) => {
     setSkemaId(id);
-    setItems(buildDefaultItems(id));
+    setItemsByTahun(Array.from({ length: jumlahTahun }, () => buildDefaultItems(id)));
+    setActiveTahun(0);
     const s = SKEMA.find((x) => x.id === id);
     setPaguMinKustom(String(s.paguMin));
     setPaguMaxKustom(String(s.paguMax));
   };
 
-  const subtotal = useMemo(() => {
-    const out = {};
-    for (const cat of CATEGORIES) out[cat.id] = items[cat.id].reduce((a, it) => a + jumlahItem(it), 0);
-    return out;
-  }, [items]);
+  // Mengubah jumlah tahun pelaksanaan: menambah tahun baru dari template default,
+  // atau memangkas tahun terakhir (dengan konfirmasi karena datanya akan hilang).
+  const ubahJumlahTahun = (n) => {
+    const target = Math.max(1, Math.min(5, Number(n) || 1));
+    if (target === jumlahTahun) return;
+    if (target < jumlahTahun) {
+      const hilang = jumlahTahun - target;
+      if (!window.confirm(`Mengurangi durasi menjadi ${target} tahun akan menghapus data RAB ${hilang} tahun terakhir. Lanjutkan?`)) return;
+      setItemsByTahun((prev) => prev.slice(0, target));
+      setActiveTahun((a) => Math.min(a, target - 1));
+    } else {
+      setItemsByTahun((prev) => [...prev, ...Array.from({ length: target - jumlahTahun }, () => buildDefaultItems(skemaId))]);
+    }
+    setJumlahTahun(target);
+  };
 
-  const total = useMemo(() => Object.values(subtotal).reduce((a, b) => a + b, 0), [subtotal]);
-
-  const habisPakai = useMemo(
-    () => CATEGORIES.filter((c) => c.habisPakai).reduce((a, c) => a + subtotal[c.id], 0),
-    [subtotal]
+  const subtotalPerTahun = useMemo(
+    () => itemsByTahun.map((yearItems) => {
+      const out = {};
+      for (const cat of CATEGORIES) out[cat.id] = yearItems[cat.id].reduce((a, it) => a + jumlahItem(it), 0);
+      return out;
+    }),
+    [itemsByTahun]
   );
+  const totalPerTahun = useMemo(
+    () => subtotalPerTahun.map((s) => Object.values(s).reduce((a, b) => a + b, 0)),
+    [subtotalPerTahun]
+  );
+  const totalKeseluruhan = useMemo(() => totalPerTahun.reduce((a, b) => a + b, 0), [totalPerTahun]);
+  const habisPakaiPerTahun = useMemo(
+    () => subtotalPerTahun.map((s) => CATEGORIES.filter((c) => c.habisPakai).reduce((a, c) => a + s[c.id], 0)),
+    [subtotalPerTahun]
+  );
+
+  const subtotal = subtotalPerTahun[activeTahun] || subtotalPerTahun[0];
+  const total = totalPerTahun[activeTahun] || 0;
+
+  const habisPakai = habisPakaiPerTahun[activeTahun] || 0;
   const tidakHabisPakai = total - habisPakai;
 
   // Komponen diurutkan dari alokasi terbesar — untuk dashboard
@@ -374,23 +421,25 @@ export default function App() {
     return `conic-gradient(${parts.join(", ")})`;
   }, [subtotal, total]);
 
-  const updateItem = (catId, rowId, field, value) => {
+  // yearIdx opsional (default tahun aktif) — memungkinkan blok cetak menampilkan &
+  // mengedit item tahun lain tanpa harus berpindah tab terlebih dahulu.
+  const updateItem = (catId, rowId, field, value, yearIdx = activeTahun) => {
     // Cegah nilai negatif pada Vol/Vol2/Harga langsung saat mengetik — atribut HTML
     // min="0" tidak benar-benar memblokir input "-", hanya menandai :invalid.
     if ((field === "vol" || field === "vol2" || field === "harga") && value !== "" && Number(value) < 0) {
       return;
     }
-    setItems((prev) => ({
+    setItemsForYear(yearIdx, (prev) => ({
       ...prev,
       [catId]: prev[catId].map((it) => (it.id === rowId ? { ...it, [field]: value } : it)),
     }));
   };
 
-  const addRow = (catId) => setItems((prev) => ({ ...prev, [catId]: [...prev[catId], emptyRow()] }));
-  const removeRow = (catId, rowId) =>
-    setItems((prev) => ({ ...prev, [catId]: prev[catId].filter((it) => it.id !== rowId) }));
-  const duplicateRow = (catId, rowId) =>
-    setItems((prev) => {
+  const addRow = (catId, yearIdx = activeTahun) => setItemsForYear(yearIdx, (prev) => ({ ...prev, [catId]: [...prev[catId], emptyRow()] }));
+  const removeRow = (catId, rowId, yearIdx = activeTahun) =>
+    setItemsForYear(yearIdx, (prev) => ({ ...prev, [catId]: prev[catId].filter((it) => it.id !== rowId) }));
+  const duplicateRow = (catId, rowId, yearIdx = activeTahun) =>
+    setItemsForYear(yearIdx, (prev) => {
       const arr = prev[catId];
       const idx = arr.findIndex((it) => it.id === rowId);
       if (idx === -1) return prev;
@@ -424,14 +473,20 @@ export default function App() {
   };
 
   const exportCSV = () => {
-    const rows = [["Komponen", "No", "Uraian", "Vol", "Sat", "Vol2", "Sat2", "Harga Satuan (Rp)", "Jumlah (Rp)"]];
-    CATEGORIES.forEach((cat) => {
-      items[cat.id].forEach((it, idx) => {
-        rows.push([cat.title, idx + 1, it.label, it.vol, it.sat, it.vol2, it.sat2, it.harga, Math.round(jumlahItem(it))]);
+    const rows = [["Tahun", "Komponen", "No", "Uraian", "Vol", "Sat", "Vol2", "Sat2", "Harga Satuan (Rp)", "Jumlah (Rp)"]];
+    itemsByTahun.forEach((yearItems, yi) => {
+      const labelTahun = `Tahun ke-${yi + 1}`;
+      CATEGORIES.forEach((cat) => {
+        yearItems[cat.id].forEach((it, idx) => {
+          rows.push([labelTahun, cat.title, idx + 1, it.label, it.vol, it.sat, it.vol2, it.sat2, it.harga, Math.round(jumlahItem(it))]);
+        });
+        rows.push([labelTahun, cat.title, "", `Subtotal ${cat.title}`, "", "", "", "", "", Math.round(subtotalPerTahun[yi][cat.id])]);
       });
-      rows.push([cat.title, "", `Subtotal ${cat.title}`, "", "", "", "", "", Math.round(subtotal[cat.id])]);
+      rows.push([labelTahun, "", "", `TOTAL RAB ${labelTahun.toUpperCase()}`, "", "", "", "", "", Math.round(totalPerTahun[yi])]);
     });
-    rows.push(["", "", "TOTAL RENCANA ANGGARAN BIAYA", "", "", "", "", "", Math.round(total)]);
+    if (jumlahTahun > 1) {
+      rows.push(["", "", "", "TOTAL KESELURUHAN (SEMUA TAHUN)", "", "", "", "", "", Math.round(totalKeseluruhan)]);
+    }
     const csv = rows
       .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
       .join("\r\n");
@@ -448,17 +503,23 @@ export default function App() {
 
   const exportXLS = () => {
     const esc = (v) => String(v).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    let body = `<tr><th colspan="9" style="font-size:16px;text-align:left;">RENCANA ANGGARAN BIAYA - ${esc(skema.nama)}</th></tr>`;
-    body += `<tr><td colspan="9">Program Studi: ${esc(progStudi || "-")} &nbsp;|&nbsp; Ketua Peneliti: ${esc(namaKetua || "-")}</td></tr>`;
+    let body = `<tr><th colspan="10" style="font-size:16px;text-align:left;">RENCANA ANGGARAN BIAYA - ${esc(skema.nama)}</th></tr>`;
+    body += `<tr><td colspan="10">Program Studi: ${esc(progStudi || "-")} &nbsp;|&nbsp; Ketua Peneliti: ${esc(namaKetua || "-")} &nbsp;|&nbsp; Durasi: ${jumlahTahun} tahun</td></tr>`;
     body += `<tr></tr>`;
-    body += `<tr><th>Komponen</th><th>No</th><th>Uraian</th><th>Vol</th><th>Sat</th><th>Vol2</th><th>Sat2</th><th>Harga Satuan (Rp)</th><th>Jumlah (Rp)</th></tr>`;
-    CATEGORIES.forEach((cat) => {
-      items[cat.id].forEach((it, idx) => {
-        body += `<tr><td>${esc(cat.title)}</td><td>${idx + 1}</td><td>${esc(it.label)}</td><td>${esc(it.vol)}</td><td>${esc(it.sat)}</td><td>${esc(it.vol2)}</td><td>${esc(it.sat2)}</td><td>${it.harga}</td><td>${Math.round(jumlahItem(it))}</td></tr>`;
+    body += `<tr><th>Tahun</th><th>Komponen</th><th>No</th><th>Uraian</th><th>Vol</th><th>Sat</th><th>Vol2</th><th>Sat2</th><th>Harga Satuan (Rp)</th><th>Jumlah (Rp)</th></tr>`;
+    itemsByTahun.forEach((yearItems, yi) => {
+      const labelTahun = `Tahun ke-${yi + 1}`;
+      CATEGORIES.forEach((cat) => {
+        yearItems[cat.id].forEach((it, idx) => {
+          body += `<tr><td>${esc(labelTahun)}</td><td>${esc(cat.title)}</td><td>${idx + 1}</td><td>${esc(it.label)}</td><td>${esc(it.vol)}</td><td>${esc(it.sat)}</td><td>${esc(it.vol2)}</td><td>${esc(it.sat2)}</td><td>${it.harga}</td><td>${Math.round(jumlahItem(it))}</td></tr>`;
+        });
+        body += `<tr><td colspan="9"><b>Subtotal ${esc(cat.title)}</b></td><td><b>${Math.round(subtotalPerTahun[yi][cat.id])}</b></td></tr>`;
       });
-      body += `<tr><td colspan="8"><b>Subtotal ${esc(cat.title)}</b></td><td><b>${Math.round(subtotal[cat.id])}</b></td></tr>`;
+      body += `<tr><td colspan="9"><b>TOTAL RAB ${esc(labelTahun.toUpperCase())}</b></td><td><b>${Math.round(totalPerTahun[yi])}</b></td></tr>`;
     });
-    body += `<tr><td colspan="8"><b>TOTAL RENCANA ANGGARAN BIAYA</b></td><td><b>${Math.round(total)}</b></td></tr>`;
+    if (jumlahTahun > 1) {
+      body += `<tr><td colspan="9"><b>TOTAL KESELURUHAN (SEMUA TAHUN)</b></td><td><b>${Math.round(totalKeseluruhan)}</b></td></tr>`;
+    }
     const html = `<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>RAB</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--><style>table{border-collapse:collapse;font-family:Calibri,Arial,sans-serif;font-size:11pt;}td,th{border:1px solid #999;padding:4px 8px;}th{background:#EDE7DE;}</style></head><body><table>${body}</table></body></html>`;
     const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -914,8 +975,9 @@ export default function App() {
             <tr><td style={{ padding: "3px 6px", fontWeight: 600, width: 170 }}>Program Studi</td><td style={{ padding: "3px 6px" }}>: {progStudi || "-"}</td></tr>
             <tr><td style={{ padding: "3px 6px", fontWeight: 600 }}>Ketua Peneliti</td><td style={{ padding: "3px 6px" }}>: {namaKetua || "-"}</td></tr>
             <tr><td style={{ padding: "3px 6px", fontWeight: 600 }}>Skema Hibah</td><td style={{ padding: "3px 6px" }}>: {skema.nama}</td></tr>
-            <tr><td style={{ padding: "3px 6px", fontWeight: 600 }}>Pagu {paguKustom ? "Kustom" : "Skema"}</td><td style={{ padding: "3px 6px" }}>: {rupiah(pagu.min)} – {rupiah(pagu.max)}</td></tr>
-            <tr><td style={{ padding: "3px 6px", fontWeight: 600 }}>Total Usulan RAB</td><td style={{ padding: "3px 6px", fontWeight: 700 }}>: {rupiah(total)}</td></tr>
+            <tr><td style={{ padding: "3px 6px", fontWeight: 600 }}>Pagu {paguKustom ? "Kustom" : "Skema"} (per tahun)</td><td style={{ padding: "3px 6px" }}>: {rupiah(pagu.min)} – {rupiah(pagu.max)}</td></tr>
+            <tr><td style={{ padding: "3px 6px", fontWeight: 600 }}>Durasi Pelaksanaan</td><td style={{ padding: "3px 6px" }}>: {jumlahTahun} tahun</td></tr>
+            <tr><td style={{ padding: "3px 6px", fontWeight: 600 }}>Total Keseluruhan ({jumlahTahun} Tahun)</td><td style={{ padding: "3px 6px", fontWeight: 700 }}>: {rupiah(totalKeseluruhan)}</td></tr>
           </tbody>
         </table>
 
@@ -961,6 +1023,20 @@ export default function App() {
                 <label style={lbl} htmlFor="input-ketua">Nama Ketua Peneliti</label>
                 <input id="input-ketua" style={{ ...inputText, width: "100%" }} value={namaKetua} onChange={(e) => setNamaKetua(e.target.value)}
                   placeholder="................................" />
+              </div>
+              <div>
+                <label style={lbl} htmlFor="input-tahun">Durasi Pelaksanaan (Model Multi Tahun)</label>
+                <select
+                  id="input-tahun" style={select} value={jumlahTahun}
+                  onChange={(e) => ubahJumlahTahun(e.target.value)}
+                >
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <option key={n} value={n}>{n} Tahun{n > 1 ? ` (Tahun 1${"–"}${n})` : " (Tunggal)"}</option>
+                  ))}
+                </select>
+                <p style={{ fontSize: 11.5, color: "#8A7A5C", marginTop: 6, marginBottom: 0 }}>
+                  Acuan durasi skema: {skema.durasi}. Setiap tahun punya rincian item & pagu tersendiri — beralih via tab tahun di "Rincian Item".
+                </p>
               </div>
             </div>
           </div>
@@ -1035,6 +1111,35 @@ export default function App() {
 
         {/* ===== DASHBOARD ===== */}
         <div className={`tab-panel ${activeTab === "dashboard" ? "" : "tab-hidden"}`} style={{ display: "grid", gap: 20 }}>
+          {jumlahTahun > 1 && (
+            <section className="card-hover" style={card}>
+              <div style={metricLbl}>📅 Ringkasan Multi Tahun ({jumlahTahun} Tahun Pelaksanaan)</div>
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 10 }}>
+                {totalPerTahun.map((t, i) => (
+                  <button
+                    key={i} onClick={() => { setActiveTahun(i); setActiveTab("rincian"); }}
+                    style={{
+                      flex: "1 1 140px", textAlign: "left", cursor: "pointer", fontFamily: "inherit",
+                      border: activeTahun === i ? "1.5px solid " + sumber.warna : "1.5px solid #E4DCCF",
+                      background: activeTahun === i ? sumber.warna + "0F" : "#FBF8F2",
+                      borderRadius: 10, padding: "10px 14px",
+                    }}
+                  >
+                    <div style={{ fontSize: 11.5, fontWeight: 700, color: "#8A7A5C", textTransform: "uppercase" }}>Tahun {i + 1}</div>
+                    <div style={{ fontFamily: "'Fraunces'", fontWeight: 700, fontSize: 17, color: "#2A241C", marginTop: 2 }}>{rupiah(t)}</div>
+                  </button>
+                ))}
+                <div style={{
+                  flex: "1 1 160px", borderRadius: 10, padding: "10px 14px",
+                  background: sumber.warna + "16", border: `1.5px solid ${sumber.warna}44`,
+                }}>
+                  <div style={{ fontSize: 11.5, fontWeight: 700, color: sumber.warna, textTransform: "uppercase" }}>Total Keseluruhan</div>
+                  <div style={{ fontFamily: "'Fraunces'", fontWeight: 700, fontSize: 17, color: sumber.warna, marginTop: 2 }}>{rupiah(totalKeseluruhan)}</div>
+                </div>
+              </div>
+            </section>
+          )}
+
           {/* Skor + ringkasan habis pakai */}
           <section className="grid-3col">
             <div className="card-hover" style={{ ...card, textAlign: "center" }}>
@@ -1144,69 +1249,123 @@ export default function App() {
           <div className="no-print scroll-hint" style={{ fontSize: 11.5, color: "#8A7A5C", marginBottom: 10, alignItems: "center", gap: 6 }}>
             ↔ Geser tabel ke samping untuk melihat semua kolom
           </div>
-          {CATEGORIES.map((cat) => (
-            <CategoryBlock
-              key={cat.id}
-              cat={cat}
-              rows={items[cat.id]}
-              subtotalVal={subtotal[cat.id]}
-              total={total}
-              onUpdate={(rowId, field, value) => updateItem(cat.id, rowId, field, value)}
-              onAdd={() => addRow(cat.id)}
-              onRemove={(rowId) => removeRow(cat.id, rowId)}
-              onDuplicate={(rowId) => duplicateRow(cat.id, rowId)}
-            />
-          ))}
 
-          {/* Total */}
-          <div style={{
-            display: "flex", justifyContent: "space-between", alignItems: "center",
-            paddingTop: 16, marginTop: 4, borderTop: "2px solid #E4DCCF",
-          }}>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 16 }}>TOTAL RENCANA ANGGARAN BIAYA</div>
-              <div style={{ fontSize: 12, color: total > pagu.max ? "#A23B23" : total < pagu.min ? "#B5820A" : "#1B5E4F", fontWeight: 600, marginTop: 2 }}>
-                Pagu {paguKustom ? "kustom" : "skema"} {rupiah(pagu.min)} – {rupiah(pagu.max)}
-                {total > pagu.max ? " · melebihi pagu maksimum" : total < pagu.min ? " · di bawah pagu minimum" : " · dalam pagu"}
+          {jumlahTahun > 1 && (
+            <div className="no-print" role="tablist" aria-label="Pilih tahun pelaksanaan" style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
+              {itemsByTahun.map((_, yi) => (
+                <button
+                  key={yi} role="tab" aria-selected={activeTahun === yi} onClick={() => setActiveTahun(yi)}
+                  style={{
+                    border: activeTahun === yi ? "1.5px solid " + sumber.warna : "1.5px solid #E4DCCF",
+                    background: activeTahun === yi ? sumber.warna + "16" : "#fff",
+                    color: activeTahun === yi ? sumber.warna : "#6B6252",
+                    padding: "7px 16px", borderRadius: 20, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                  }}
+                >
+                  Tahun {yi + 1}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {itemsByTahun.map((yearItems, yi) => (
+            <div key={yi} className={activeTahun === yi ? "" : "tab-hidden"}>
+              {jumlahTahun > 1 && (
+                <div className="print-only" style={{ fontFamily: "'Fraunces'", fontWeight: 700, fontSize: 17, margin: "18px 0 10px", borderBottom: "2px solid #E4DCCF", paddingBottom: 6 }}>
+                  Tahun ke-{yi + 1}
+                </div>
+              )}
+              {CATEGORIES.map((cat) => (
+                <CategoryBlock
+                  key={cat.id}
+                  cat={cat}
+                  rows={yearItems[cat.id]}
+                  subtotalVal={subtotalPerTahun[yi][cat.id]}
+                  total={totalPerTahun[yi]}
+                  onUpdate={(rowId, field, value) => updateItem(cat.id, rowId, field, value, yi)}
+                  onAdd={() => addRow(cat.id, yi)}
+                  onRemove={(rowId) => removeRow(cat.id, rowId, yi)}
+                  onDuplicate={(rowId) => duplicateRow(cat.id, rowId, yi)}
+                />
+              ))}
+
+              {/* Total tahun berjalan */}
+              <div style={{
+                display: "flex", justifyContent: "space-between", alignItems: "center",
+                paddingTop: 16, marginTop: 4, borderTop: "2px solid #E4DCCF",
+              }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 16 }}>
+                    TOTAL RAB {jumlahTahun > 1 ? `TAHUN KE-${yi + 1}` : "RENCANA ANGGARAN BIAYA"}
+                  </div>
+                  <div style={{ fontSize: 12, color: totalPerTahun[yi] > pagu.max ? "#A23B23" : totalPerTahun[yi] < pagu.min ? "#B5820A" : "#1B5E4F", fontWeight: 600, marginTop: 2 }}>
+                    Pagu {paguKustom ? "kustom" : "skema"} (per tahun) {rupiah(pagu.min)} – {rupiah(pagu.max)}
+                    {totalPerTahun[yi] > pagu.max ? " · melebihi pagu maksimum" : totalPerTahun[yi] < pagu.min ? " · di bawah pagu minimum" : " · dalam pagu"}
+                  </div>
+                </div>
+                <div style={{ fontFamily: "'Fraunces'", fontWeight: 700, fontSize: 26, color: sumber.warna }}>
+                  {rupiah(totalPerTahun[yi])}
+                </div>
+              </div>
+
+              {/* Blok khusus cetak: ringkasan kepatuhan komponen tahun ini */}
+              <div className="print-only" style={{ marginTop: 24 }}>
+                <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>
+                  Ringkasan Kepatuhan Komponen — {skema.nama}{jumlahTahun > 1 ? ` (Tahun ke-${yi + 1})` : ""}
+                </div>
+                <table style={{ width: "100%", fontSize: 11.5, borderCollapse: "collapse", marginBottom: 12 }}>
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: "left", borderBottom: "1px solid #999", padding: "3px 6px" }}>Komponen</th>
+                      <th style={{ borderBottom: "1px solid #999", padding: "3px 6px" }}>Realisasi</th>
+                      <th style={{ borderBottom: "1px solid #999", padding: "3px 6px" }}>Batas Skema</th>
+                      <th style={{ borderBottom: "1px solid #999", padding: "3px 6px" }}>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      { label: "Honorarium", nilai: subtotalPerTahun[yi].honor / totalPerTahun[yi], batas: skema.batas.honor, arah: "maks" },
+                      { label: "Peralatan (tidak habis pakai)", nilai: subtotalPerTahun[yi].peralatan / totalPerTahun[yi], batas: skema.batas.peralatan, arah: "maks" },
+                      { label: "Perjalanan Dinas", nilai: subtotalPerTahun[yi].perjalanan / totalPerTahun[yi], batas: skema.batas.perjalanan, arah: "maks" },
+                      { label: "Dana Habis Pakai", nilai: habisPakaiPerTahun[yi] / totalPerTahun[yi], batas: skema.minHabisPakai, arah: "min" },
+                    ].map((r) => {
+                      const sesuai = r.arah === "maks" ? r.nilai <= r.batas + 1e-6 : r.nilai >= r.batas - 1e-6;
+                      return (
+                        <tr key={r.label}>
+                          <td style={{ padding: "3px 6px" }}>{r.label}</td>
+                          <td style={{ padding: "3px 6px", textAlign: "center" }}>{pct(r.nilai)}</td>
+                          <td style={{ padding: "3px 6px", textAlign: "center" }}>{r.arah} {pct(r.batas)}</td>
+                          <td style={{ padding: "3px 6px", textAlign: "center" }}>{sesuai ? "Sesuai" : "Perlu perbaikan"}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             </div>
-            <div style={{ fontFamily: "'Fraunces'", fontWeight: 700, fontSize: 26, color: sumber.warna }}>
-              {rupiah(total)}
+          ))}
+
+          {/* Ringkasan Total Keseluruhan — tampil di layar & cetak saat multi tahun */}
+          {jumlahTahun > 1 && (
+            <div style={{
+              marginTop: 20, padding: "16px 18px", borderRadius: 12,
+              background: sumber.warna + "0F", border: `1.5px solid ${sumber.warna}33`,
+              display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12,
+            }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 15 }}>TOTAL KESELURUHAN ({jumlahTahun} Tahun)</div>
+                <div style={{ fontSize: 12, color: "#6B6252", marginTop: 2 }}>
+                  {totalPerTahun.map((t, i) => `Th.${i + 1}: ${rupiah(t)}`).join("  ·  ")}
+                </div>
+              </div>
+              <div style={{ fontFamily: "'Fraunces'", fontWeight: 700, fontSize: 26, color: sumber.warna }}>
+                {rupiah(totalKeseluruhan)}
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Blok khusus cetak: ringkasan kepatuhan + lembar pengesahan, siap ditempel ke proposal */}
+          {/* Blok khusus cetak: lembar pengesahan, siap ditempel ke proposal */}
           <div className="print-only" style={{ marginTop: 24 }}>
-            <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 8 }}>Ringkasan Kepatuhan Komponen — {skema.nama}</div>
-            <table style={{ width: "100%", fontSize: 11.5, borderCollapse: "collapse", marginBottom: 28 }}>
-              <thead>
-                <tr>
-                  <th style={{ textAlign: "left", borderBottom: "1px solid #999", padding: "3px 6px" }}>Komponen</th>
-                  <th style={{ borderBottom: "1px solid #999", padding: "3px 6px" }}>Realisasi</th>
-                  <th style={{ borderBottom: "1px solid #999", padding: "3px 6px" }}>Batas Skema</th>
-                  <th style={{ borderBottom: "1px solid #999", padding: "3px 6px" }}>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[
-                  { label: "Honorarium", nilai: subtotal.honor / total, batas: skema.batas.honor, arah: "maks" },
-                  { label: "Peralatan (tidak habis pakai)", nilai: subtotal.peralatan / total, batas: skema.batas.peralatan, arah: "maks" },
-                  { label: "Perjalanan Dinas", nilai: subtotal.perjalanan / total, batas: skema.batas.perjalanan, arah: "maks" },
-                  { label: "Dana Habis Pakai", nilai: habisPakai / total, batas: skema.minHabisPakai, arah: "min" },
-                ].map((r) => {
-                  const sesuai = r.arah === "maks" ? r.nilai <= r.batas + 1e-6 : r.nilai >= r.batas - 1e-6;
-                  return (
-                    <tr key={r.label}>
-                      <td style={{ padding: "3px 6px" }}>{r.label}</td>
-                      <td style={{ padding: "3px 6px", textAlign: "center" }}>{pct(r.nilai)}</td>
-                      <td style={{ padding: "3px 6px", textAlign: "center" }}>{r.arah} {pct(r.batas)}</td>
-                      <td style={{ padding: "3px 6px", textAlign: "center" }}>{sesuai ? "Sesuai" : "Perlu perbaikan"}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 40, fontSize: 12, gap: 20 }}>
               <div style={{ textAlign: "center", width: "45%" }}>
                 Mengetahui,<br />Ketua LPPM / Lembaga Penelitian

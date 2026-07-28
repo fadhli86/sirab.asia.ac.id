@@ -832,6 +832,8 @@ export default function App() {
   );
 
   const skorColor = skorRealistis >= 80 ? "#1B5E4F" : skorRealistis >= 55 ? "#B5820A" : "#A23B23";
+  // Varian terang untuk dipakai di atas latar gelap header (kontras cukup di background gradasi)
+  const heroSkorColor = skorRealistis >= 80 ? "#8FE3C0" : skorRealistis >= 55 ? "#F5D68A" : "#F3A08A";
 
   return (
     <div style={{
@@ -868,10 +870,13 @@ export default function App() {
           .tab-btn{ padding:8px 12px !important; font-size:12.5px !important; }
           .btn-ghost, .btn-primary{ font-size:12px !important; padding:7px 10px !important; }
           .scroll-hint{ display:flex !important; }
+          .hero-row{ align-items: stretch !important; }
+          .hero-stat-card{ width:100% !important; }
         }
         @media (max-width: 480px) {
           h1{ font-size:23px !important; }
           .icon-badge{ width:26px !important; height:26px !important; font-size:12px !important; }
+          .hero-stat-card{ padding:16px 18px !important; }
         }
         .card-hover{ transition: transform .2s ease, box-shadow .2s ease; }
         .card-hover:hover{ transform: translateY(-3px); box-shadow: 0 6px 14px rgba(60,50,30,.10), 0 18px 32px rgba(60,50,30,.08) !important; }
@@ -905,62 +910,127 @@ export default function App() {
       <header style={{
         position: "relative", overflow: "hidden",
         background: `
-          radial-gradient(circle at 85% -10%, rgba(255,255,255,.16), transparent 45%),
-          radial-gradient(circle at 8% 110%, rgba(0,0,0,.18), transparent 50%),
-          linear-gradient(135deg, ${sumber.warna} 0%, ${sumber.warna}E6 55%, ${sumber.warna}CC 100%)
+          radial-gradient(circle at 88% -15%, rgba(255,255,255,.18), transparent 40%),
+          radial-gradient(circle at 4% 115%, rgba(0,0,0,.22), transparent 55%),
+          linear-gradient(155deg, ${sumber.warna} 0%, ${sumber.warna}E6 48%, #221C12 130%)
         `,
-        color: "#FBF8F2", padding: "44px 28px 52px",
-        boxShadow: "0 18px 44px rgba(0,0,0,.22)",
+        color: "#FBF8F2", padding: "40px 28px 34px",
+        boxShadow: "0 18px 44px rgba(0,0,0,.24)",
       }}>
         {/* Watermark dekoratif — motif cincin monogram premium, tidak mengganggu keterbacaan */}
         <div aria-hidden="true" style={{
-          position: "absolute", top: -60, right: -40, width: 280, height: 280, borderRadius: "50%",
-          border: "1px solid rgba(255,255,255,.14)", pointerEvents: "none",
+          position: "absolute", top: -70, right: -50, width: 320, height: 320, borderRadius: "50%",
+          border: "1px solid rgba(255,255,255,.13)", pointerEvents: "none",
         }} />
         <div aria-hidden="true" style={{
-          position: "absolute", top: -20, right: 20, width: 180, height: 180, borderRadius: "50%",
-          border: "1px solid rgba(255,255,255,.10)", pointerEvents: "none",
+          position: "absolute", top: -26, right: 30, width: 210, height: 210, borderRadius: "50%",
+          border: "1px solid rgba(255,255,255,.09)", pointerEvents: "none",
         }} />
         <div aria-hidden="true" style={{
           position: "absolute", inset: 0,
           backgroundImage: "radial-gradient(rgba(255,255,255,.10) 1px, transparent 1px)",
-          backgroundSize: "18px 18px", opacity: .35, pointerEvents: "none",
-          maskImage: "linear-gradient(180deg, rgba(0,0,0,.6), transparent 75%)",
-          WebkitMaskImage: "linear-gradient(180deg, rgba(0,0,0,.6), transparent 75%)",
+          backgroundSize: "18px 18px", opacity: .3, pointerEvents: "none",
+          maskImage: "linear-gradient(180deg, rgba(0,0,0,.6), transparent 70%)",
+          WebkitMaskImage: "linear-gradient(180deg, rgba(0,0,0,.6), transparent 70%)",
         }} />
         <div style={{
           position: "absolute", left: 0, right: 0, bottom: 0, height: 3,
           background: "linear-gradient(90deg, transparent, #E8C97A, #FBF8F2, #E8C97A, transparent)", opacity: .85,
         }} />
-        <div style={{ position: "relative", maxWidth: 1080, margin: "0 auto" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6 }}>
-            <span style={{
-              width: 42, height: 42, borderRadius: 12, background: "linear-gradient(150deg, rgba(255,255,255,.22), rgba(255,255,255,.06))",
-              border: "1px solid rgba(255,255,255,.32)", display: "flex", alignItems: "center", justifyContent: "center",
-              fontFamily: "'Fraunces'", fontWeight: 700, fontSize: 16, letterSpacing: .5, flexShrink: 0,
-              boxShadow: "0 6px 16px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.25)",
-            }}>RB</span>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: "'DM Sans'", fontSize: 12, letterSpacing: 3, textTransform: "uppercase", opacity: .9, fontWeight: 600 }}>
-              <span>Sistem Penyusun RAB</span>
-              <span style={{ width: 3, height: 3, borderRadius: "50%", background: "currentColor", opacity: .7 }} />
-              <span style={{ opacity: .8 }}>Prodi Teknik Informatika ITB Asia</span>
+
+        <div className="hero-row" style={{
+          position: "relative", maxWidth: 1080, margin: "0 auto",
+          display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 30, flexWrap: "wrap",
+        }}>
+          {/* Kolom kiri — identitas produk & judul */}
+          <div style={{ flex: "1 1 340px", minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+              <span style={{
+                width: 42, height: 42, borderRadius: 12, background: "linear-gradient(150deg, rgba(255,255,255,.24), rgba(255,255,255,.05))",
+                border: "1px solid rgba(255,255,255,.32)", display: "flex", alignItems: "center", justifyContent: "center",
+                fontFamily: "'Fraunces'", fontWeight: 700, fontSize: 16, letterSpacing: .5, flexShrink: 0,
+                boxShadow: "0 6px 16px rgba(0,0,0,.2), inset 0 1px 0 rgba(255,255,255,.25)",
+              }}>RB</span>
+              <div style={{ display: "grid", gap: 2, minWidth: 0 }}>
+                <div style={{ fontFamily: "'DM Sans'", fontSize: 11.5, letterSpacing: 2.6, textTransform: "uppercase", fontWeight: 700, color: "#F1DDAE" }}>
+                  Sistem Penyusun RAB
+                </div>
+                <div style={{ fontSize: 12, opacity: .72, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  Prodi Teknik Informatika · ITB Asia
+                </div>
+              </div>
+            </div>
+
+            <h1 style={{
+              fontFamily: "'Fraunces'", fontWeight: 600, fontSize: 40, margin: "0 0 10px", lineHeight: 1.05, letterSpacing: -0.5,
+              backgroundImage: "linear-gradient(120deg, #FFFDF8 35%, #F1DDAE 65%, #FFFDF8 100%)",
+              WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent",
+              filter: "drop-shadow(0 2px 18px rgba(0,0,0,.16))",
+            }}>
+              Sistem RAB Hibah
+            </h1>
+            <p style={{ margin: "0 0 16px", maxWidth: 560, opacity: .92, fontSize: 14.5, lineHeight: 1.6 }}>
+              Susun Rencana Anggaran Biaya proposal hibah per komponen & item, lengkap dengan
+              validasi batas komponen, model multi tahun, dan pemisahan dana habis pakai —
+              agar anggaran lolos telaah reviewer.
+            </p>
+            <div className="no-print" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <span style={{
+                fontSize: 11.5, fontWeight: 700, padding: "5px 12px", borderRadius: 20, letterSpacing: .3,
+                background: "rgba(255,255,255,.14)", border: "1px solid rgba(255,255,255,.24)", color: "#FBF8F2",
+              }}>
+                {skema.nama.split("(")[0].trim()}
+              </span>
+              <span style={{
+                fontSize: 11.5, fontWeight: 700, padding: "5px 12px", borderRadius: 20, letterSpacing: .3,
+                background: "rgba(255,255,255,.14)", border: "1px solid rgba(255,255,255,.24)", color: "#FBF8F2",
+              }}>
+                Durasi {skema.durasi}
+              </span>
+              {jumlahTahun > 1 && (
+                <span style={{
+                  fontSize: 11.5, fontWeight: 700, padding: "5px 12px", borderRadius: 20, letterSpacing: .3,
+                  background: "rgba(232,201,122,.22)", border: "1px solid rgba(232,201,122,.4)", color: "#FBF3DE",
+                }}>
+                  📅 Model {jumlahTahun} Tahun
+                </span>
+              )}
             </div>
           </div>
-          <h1 style={{
-            fontFamily: "'Fraunces'", fontWeight: 600, fontSize: 44, margin: "10px 0 8px", lineHeight: 1.05, letterSpacing: -0.5,
-            backgroundImage: "linear-gradient(120deg, #FFFDF8 35%, #F1DDAE 65%, #FFFDF8 100%)",
-            WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent",
-            filter: "drop-shadow(0 2px 18px rgba(0,0,0,.16))",
+
+          {/* Kolom kanan — ringkasan langsung, kartu kaca premium */}
+          <div className="hero-stat-card no-print" style={{
+            flex: "0 1 268px", minWidth: 240,
+            background: "rgba(255,255,255,.09)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)",
+            border: "1px solid rgba(255,255,255,.22)", borderRadius: 18,
+            padding: "20px 22px", boxShadow: "0 20px 44px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.16)",
           }}>
-            Sistem RAB Hibah
-          </h1>
-          <p style={{ margin: 0, maxWidth: 660, opacity: .94, fontSize: 15, lineHeight: 1.65 }}>
-            Susun Rencana Anggaran Biaya proposal hibah per komponen & item (mengikuti format resmi:
-            Vol · Sat · Vol2 · Sat2 · Harga Satuan), lengkap dengan validasi batas komponen dan
-            pemisahan dana habis pakai vs tidak habis pakai — agar anggaran lolos telaah reviewer.
-          </p>
+            <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 1.4, textTransform: "uppercase", opacity: .72 }}>
+              {jumlahTahun > 1 ? `Total Keseluruhan (${jumlahTahun} Th)` : "Total Rencana Anggaran"}
+            </div>
+            <div style={{ fontFamily: "'Fraunces'", fontWeight: 700, fontSize: 27, marginTop: 4, lineHeight: 1.15 }}>
+              {rupiah(jumlahTahun > 1 ? totalKeseluruhan : total)}
+            </div>
+            <div style={{ height: 1, background: "rgba(255,255,255,.18)", margin: "16px 0" }} />
+            <div style={{ display: "flex", gap: 14 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", opacity: .72 }}>Skor Realistis</div>
+                <div style={{ fontFamily: "'Fraunces'", fontWeight: 700, fontSize: 19, marginTop: 3, color: heroSkorColor }}>
+                  {skorRealistis}<span style={{ fontSize: 12, opacity: .7 }}> /100</span>
+                </div>
+              </div>
+              <div style={{ width: 1, background: "rgba(255,255,255,.18)" }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", opacity: .72 }}>Tingkat</div>
+                <div style={{ fontFamily: "'Fraunces'", fontWeight: 700, fontSize: 14, marginTop: 5, lineHeight: 1.25 }}>
+                  {skema.tkt.split("·")[0].trim()}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </header>
+
 
       <main style={{ maxWidth: 1080, margin: "-24px auto 0", padding: "0 20px", display: "grid", gap: 20 }}>
 

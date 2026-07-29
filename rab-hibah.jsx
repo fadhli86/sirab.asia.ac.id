@@ -40,6 +40,53 @@ const CATEGORY_META = {
   lain: { icon: "📄", color: "#6B4A8A" },
 };
 
+// Panduan singkat & contoh uraian detail per komponen — ditampilkan sebagai tips + saran
+// autocomplete pada kolom Uraian, agar pengaju proposal mudah menulis uraian yang spesifik
+// dan tidak mudah dipertanyakan reviewer (nama item, spesifikasi/cakupan, tujuan penggunaan).
+const CATEGORY_TIPS = {
+  honor: "Sebutkan peran (ketua/anggota/asisten), jumlah OB, dan acuan SBM.",
+  bahan: "Sebutkan nama bahan/komponen, spesifikasi, dan kegunaannya dalam penelitian.",
+  data: "Jelaskan metode pengumpulan data serta cakupan responden/sampel.",
+  perjalanan: "Sebutkan tujuan, moda transportasi, dan jumlah orang/hari.",
+  sewa: "Sebutkan nama alat/ruang yang disewa dan durasi pemakaian.",
+  peralatan: "Jelaskan spesifikasi & fungsi alat agar porsinya wajar (aset, bukan habis pakai).",
+  lain: "Sebutkan jenis luaran (artikel/HKI/laporan) dan target publikasinya.",
+};
+const CONTOH_URAIAN = {
+  honor: [
+    "Honorarium ketua peneliti (1 org x 8 OB, sesuai SBM Kemenkeu 2026)",
+    "Honorarium anggota peneliti bidang statistik (2 org x 8 OB)",
+    "Honorarium asisten lapangan pengumpulan data primer (2 org x 20 OH)",
+  ],
+  bahan: [
+    "Reagen kimia analisis sampel air (spesifikasi & merk, 1 paket)",
+    "Komponen elektronik prototipe sensor IoT (1 paket)",
+    "Lisensi perangkat lunak analisis statistik (1 tahun)",
+  ],
+  data: [
+    "Honor enumerator survei 150 responden di 3 kecamatan",
+    "Transkripsi wawancara mendalam 20 informan",
+    "Uji laboratorium sampel tanah (20 sampel, parameter unsur hara)",
+  ],
+  perjalanan: [
+    "Transport survei lapangan tim peneliti (2 org x 5 OH, wilayah kerja)",
+    "Perjalanan diseminasi/seminar hasil penelitian nasional (1 org x 3 hari)",
+  ],
+  sewa: [
+    "Sewa instrumen GC-MS untuk analisis sampel (3 bulan)",
+    "Sewa ruang laboratorium terpadu kampus mitra (1 semester)",
+  ],
+  peralatan: [
+    "Laptop untuk pengolahan data & simulasi (1 unit, spesifikasi i7/16GB)",
+    "Sensor akuisisi data lapangan (1 unit, spesifikasi terlampir)",
+  ],
+  lain: [
+    "Biaya publikasi artikel jurnal internasional bereputasi (APC, 1 artikel)",
+    "Penggandaan & penjilidan laporan akhir penelitian (10 eksemplar)",
+    "Pengurusan HKI luaran penelitian (1 paket)",
+  ],
+};
+
 // Uraian & satuan default per komponen — identik di semua skema pada
 // berkas resource, hanya harga satuan yang dikalibrasi berbeda.
 const ITEM_TEMPLATE = {
@@ -76,6 +123,12 @@ const ITEM_TEMPLATE = {
     { label: "Luaran wajib (HKI / produk)", vol: 1, sat: "paket", vol2: 1, sat2: "-" },
   ],
 };
+
+// Lookup label default per komponen (dari ITEM_TEMPLATE) — dipakai untuk mendeteksi
+// uraian yang belum diubah pengaju dari teks bawaan template (masih generik).
+const ITEM_TEMPLATE_LOOKUP = Object.fromEntries(
+  Object.entries(ITEM_TEMPLATE).map(([catId, arr]) => [catId, arr.map((it) => it.label)])
+);
 
 // Harga satuan acuan (Rp) per skema, hasil kalibrasi template resmi agar
 // proporsional terhadap pagu masing-masing skema. Urutan mengikuti ITEM_TEMPLATE.
@@ -783,6 +836,27 @@ export default function App() {
           id: `harga-kosong-${cat.id}`, level: "warn",
           title: `Lengkapi harga satuan pada ${NAMA(cat.id)}`,
           detail: `${kosong.length} item belum memiliki harga satuan.${rerata > 0 ? ` Acuan harga satuan skema ini sekitar ${rupiah(rerata)} per item.` : ""}`,
+        });
+      }
+    }
+
+    // Uraian yang masih kosong/terlalu singkat atau belum diubah dari template default
+    // rawan dianggap "tidak jelas" oleh reviewer — beri contoh uraian detail per komponen.
+    const templateLabels = ITEM_TEMPLATE_LOOKUP;
+    for (const cat of CATEGORIES) {
+      const berbiaya = items[cat.id].filter((it) => Number(it.harga) > 0 && (Number(it.vol) || 0) > 0);
+      const perluDetail = berbiaya.filter((it) => {
+        const label = it.label.trim();
+        if (!label) return true;
+        if (label.length < 10) return true;
+        return (templateLabels[cat.id] || []).includes(label);
+      });
+      if (perluDetail.length) {
+        const contoh = CONTOH_URAIAN[cat.id]?.[0];
+        recs.push({
+          id: `uraian-detail-${cat.id}`, level: "warn",
+          title: `Perjelas uraian item pada ${NAMA(cat.id)}`,
+          detail: `${perluDetail.length} item masih kosong/generik (belum menyebut spesifikasi/tujuan). ${CATEGORY_TIPS[cat.id] || ""}${contoh ? ` Contoh uraian detail: “${contoh}”.` : ""}`,
         });
       }
     }
@@ -1548,6 +1622,8 @@ export default function App() {
 
 function CategoryBlock({ cat, rows, subtotalVal, total, onUpdate, onAdd, onRemove, onDuplicate }) {
   const frac = total > 0 ? subtotalVal / total : 0;
+  const contoh = CONTOH_URAIAN[cat.id] || [];
+  const datalistId = `contoh-${cat.id}`;
   return (
     <div className="rab-category" style={{ marginBottom: 24 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
@@ -1567,6 +1643,19 @@ function CategoryBlock({ cat, rows, subtotalVal, total, onUpdate, onAdd, onRemov
         </div>
       </div>
 
+      {CATEGORY_TIPS[cat.id] && (
+        <div className="no-print" style={{
+          display: "flex", gap: 7, alignItems: "flex-start", fontSize: 11.5, color: "#8A7A5C",
+          background: "#FBF8F2", border: "1px solid #F0EADF", borderRadius: 8, padding: "7px 10px", marginBottom: 10, lineHeight: 1.5,
+        }}>
+          <span style={{ flexShrink: 0 }}>💡</span>
+          <span>
+            <strong style={{ color: "#6B6252" }}>Tips uraian:</strong> {CATEGORY_TIPS[cat.id]}
+            {contoh[0] && <> &nbsp;·&nbsp; <em>cth: “{contoh[0]}”</em></>}
+          </span>
+        </div>
+      )}
+
       <div style={{ overflowX: "auto" }}>
         <table style={table}>
           <thead>
@@ -1583,12 +1672,17 @@ function CategoryBlock({ cat, rows, subtotalVal, total, onUpdate, onAdd, onRemov
             </tr>
           </thead>
           <tbody>
+            {contoh.length > 0 && (
+              <datalist id={datalistId}>
+                {contoh.map((c) => <option key={c} value={c} />)}
+              </datalist>
+            )}
             {rows.map((it, idx) => (
               <tr key={it.id} className="rab-row">
                 <td style={td}>{idx + 1}</td>
                 <td style={{ ...td, textAlign: "left" }}>
-                  <input style={inputCell} value={it.label} aria-label={`Uraian item ${cat.title}`}
-                    onChange={(e) => onUpdate(it.id, "label", e.target.value)} placeholder="Uraian item..." />
+                  <input style={inputCell} value={it.label} aria-label={`Uraian item ${cat.title}`} list={datalistId}
+                    onChange={(e) => onUpdate(it.id, "label", e.target.value)} placeholder={contoh[0] ? `Cth: ${contoh[0]}` : "Uraian item..."} />
                 </td>
                 <td style={td}>
                   <input style={{ ...inputCell, textAlign: "center" }} type="number" min="0" value={it.vol} aria-label="Vol"

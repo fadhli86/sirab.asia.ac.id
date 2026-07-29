@@ -71,14 +71,17 @@ const CONTOH_URAIAN = {
   perjalanan: [
     "Transport survei lapangan tim peneliti (2 org x 5 OH, wilayah kerja)",
     "Perjalanan diseminasi/seminar hasil penelitian nasional (1 org x 3 hari)",
+    "Transport koordinasi dengan mitra/lokasi penelitian (2 org x 2 OH)",
   ],
   sewa: [
     "Sewa instrumen GC-MS untuk analisis sampel (3 bulan)",
     "Sewa ruang laboratorium terpadu kampus mitra (1 semester)",
+    "Sewa kendaraan operasional survei lapangan (10 hari)",
   ],
   peralatan: [
     "Laptop untuk pengolahan data & simulasi (1 unit, spesifikasi i7/16GB)",
     "Sensor akuisisi data lapangan (1 unit, spesifikasi terlampir)",
+    "Printer & scanner dokumen penelitian (1 unit)",
   ],
   lain: [
     "Biaya publikasi artikel jurnal internasional bereputasi (APC, 1 artikel)",
@@ -129,6 +132,17 @@ const ITEM_TEMPLATE = {
 const ITEM_TEMPLATE_LOOKUP = Object.fromEntries(
   Object.entries(ITEM_TEMPLATE).map(([catId, arr]) => [catId, arr.map((it) => it.label)])
 );
+
+// Uraian dianggap generik/kurang detail bila kosong, terlalu singkat (<10 karakter),
+// atau masih persis sama dengan teks bawaan template (belum disesuaikan pengaju).
+// Dipakai bersama oleh: rekomendasi AI, badge peringatan per baris, dan fitur
+// "klik contoh untuk isi otomatis" — agar kriterianya selalu konsisten di satu tempat.
+const isUraianGenerik = (catId, label) => {
+  const trimmed = (label || "").trim();
+  if (!trimmed) return true;
+  if (trimmed.length < 10) return true;
+  return (ITEM_TEMPLATE_LOOKUP[catId] || []).includes(trimmed);
+};
 
 // Harga satuan acuan (Rp) per skema, hasil kalibrasi template resmi agar
 // proporsional terhadap pagu masing-masing skema. Urutan mengikuti ITEM_TEMPLATE.
@@ -508,6 +522,18 @@ export default function App() {
     if (!window.confirm("Muat ulang template default skema ini? Item yang sudah diubah akan tertimpa.")) return;
     setItems(buildDefaultItems(skemaId));
   };
+
+  // Mengisi otomatis salah satu baris uraian dengan contoh yang diklik pengaju:
+  // menyasar baris pertama yang uraiannya masih generik (kosong/singkat/bawaan template);
+  // bila semua baris sudah spesifik, contoh ditambahkan sebagai baris baru.
+  const useContoh = (catId, text, yearIdx = activeTahun) => {
+    setItemsForYear(yearIdx, (prev) => {
+      const arr = prev[catId];
+      const idx = arr.findIndex((it) => isUraianGenerik(catId, it.label));
+      if (idx === -1) return { ...prev, [catId]: [...arr, { ...emptyRow(), label: text }] };
+      return { ...prev, [catId]: arr.map((it, i) => (i === idx ? { ...it, label: text } : it)) };
+    });
+  };
   const kosongkanSemua = () => {
     if (!window.confirm("Kosongkan seluruh item RAB? Tindakan ini tidak bisa dibatalkan.")) return;
     const out = {};
@@ -845,15 +871,9 @@ export default function App() {
 
     // Uraian yang masih kosong/terlalu singkat atau belum diubah dari template default
     // rawan dianggap "tidak jelas" oleh reviewer — beri contoh uraian detail per komponen.
-    const templateLabels = ITEM_TEMPLATE_LOOKUP;
     for (const cat of CATEGORIES) {
       const berbiaya = items[cat.id].filter((it) => Number(it.harga) > 0 && (Number(it.vol) || 0) > 0);
-      const perluDetail = berbiaya.filter((it) => {
-        const label = it.label.trim();
-        if (!label) return true;
-        if (label.length < 10) return true;
-        return (templateLabels[cat.id] || []).includes(label);
-      });
+      const perluDetail = berbiaya.filter((it) => isUraianGenerik(cat.id, it.label));
       if (perluDetail.length) {
         const contoh = CONTOH_URAIAN[cat.id]?.[0];
         recs.push({
@@ -974,6 +994,8 @@ export default function App() {
         .btn-primary:hover{ filter: brightness(1.1); box-shadow: 0 6px 18px rgba(0,0,0,.24) !important; transform: translateY(-1px); }
         .rab-row:hover td{ background: #FBF8F2; }
         .rab-row td{ transition: background .12s ease; }
+        .rab-row:nth-child(even) td{ background: #FBF9F4; }
+        .rab-row:nth-child(even):hover td{ background: #F5EFE2; }
         .icon-badge{ display:inline-flex; align-items:center; justify-content:center; border-radius:10px; flex-shrink:0; }
         .print-only{ display:none; }
         @media print {
@@ -1395,7 +1417,7 @@ export default function App() {
           <input id="import-csv-input" type="file" accept=".csv,.xls,.xlsx,text/csv,application/vnd.ms-excel" onChange={handleImportFile} style={{ display: "none" }} />
           <button className="btn-ghost" onClick={exportCSV} style={btnGhost}>Unduh CSV</button>
           <button className="btn-ghost" onClick={exportXLS} style={btnGhost}>Unduh Excel (.xls)</button>
-          <button className="btn-primary" onClick={() => window.print()} style={{ ...btnGhost, background: sumber.warna, color: "#fff", borderColor: sumber.warna, boxShadow: "0 3px 10px rgba(0,0,0,.16)" }}>Cetak / Simpan PDF</button>
+          <button className="btn-primary" onClick={() => window.print()} style={btnPrimary(sumber.warna)}>Cetak / Simpan PDF</button>
         </section>
 
         {/* Rincian Item RAB per komponen */}
@@ -1441,6 +1463,7 @@ export default function App() {
                   onAdd={() => addRow(cat.id, yi)}
                   onRemove={(rowId) => removeRow(cat.id, rowId, yi)}
                   onDuplicate={(rowId) => duplicateRow(cat.id, rowId, yi)}
+                  onUseContoh={(text) => useContoh(cat.id, text, yi)}
                 />
               ))}
 
@@ -1552,7 +1575,7 @@ export default function App() {
               <button
                 className="no-print"
                 onClick={() => actionableRekomendasi.forEach((r) => applyRekomendasi(r))}
-                style={{ ...btnGhost, background: "#1B5E4F", color: "#fff", borderColor: "#1B5E4F", boxShadow: "0 3px 10px rgba(0,0,0,.16)", flexShrink: 0 }}
+                style={{ ...btnPrimary("#1B5E4F"), flexShrink: 0 }}
               >
                 ⚡ Terapkan Semua ({actionableRekomendasi.length})
               </button>
@@ -1568,16 +1591,8 @@ export default function App() {
           ) : (
             <div style={{ display: "grid", gap: 10 }} className="no-print">
               {rekomendasi.map((r) => (
-                <div key={r.id} style={{
-                  display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap",
-                  background: r.level === "error" ? "#FBEAE4" : "#FBF3DE",
-                  border: `1px solid ${r.level === "error" ? "#E7BBAC" : "#E8D5A0"}`,
-                  padding: "12px 14px", borderRadius: 10,
-                }}>
-                  <span style={{
-                    fontSize: 11, fontWeight: 800, padding: "3px 8px", borderRadius: 6, marginTop: 1,
-                    background: r.level === "error" ? "#A23B23" : "#B5820A", color: "#fff", flexShrink: 0,
-                  }}>
+                <div key={r.id} style={alertCard(r.level)}>
+                  <span style={alertBadge(r.level)}>
                     {r.level === "error" ? "WAJIB" : "SARAN"}
                   </span>
                   <div style={{ flex: 1, minWidth: 200 }}>
@@ -1611,16 +1626,8 @@ export default function App() {
           ) : (
             <div style={{ display: "grid", gap: 10 }}>
               {validasi.map((i, idx) => (
-                <div key={idx} style={{
-                  display: "flex", gap: 12, alignItems: "flex-start",
-                  background: i.level === "error" ? "#FBEAE4" : "#FBF3DE",
-                  border: `1px solid ${i.level === "error" ? "#E7BBAC" : "#E8D5A0"}`,
-                  padding: "12px 14px", borderRadius: 10,
-                }}>
-                  <span style={{
-                    fontSize: 11, fontWeight: 800, padding: "3px 8px", borderRadius: 6, marginTop: 1,
-                    background: i.level === "error" ? "#A23B23" : "#B5820A", color: "#fff", flexShrink: 0,
-                  }}>
+                <div key={idx} style={alertCard(i.level)}>
+                  <span style={alertBadge(i.level)}>
                     {i.level === "error" ? "WAJIB" : "SARAN"}
                   </span>
                   <span style={{ fontSize: 13.5, lineHeight: 1.5, color: "#3A322A" }}>{i.msg}</span>
@@ -1644,15 +1651,16 @@ export default function App() {
   );
 }
 
-function CategoryBlock({ cat, rows, subtotalVal, total, onUpdate, onAdd, onRemove, onDuplicate }) {
+function CategoryBlock({ cat, rows, subtotalVal, total, onUpdate, onAdd, onRemove, onDuplicate, onUseContoh }) {
   const frac = total > 0 ? subtotalVal / total : 0;
   const contoh = CONTOH_URAIAN[cat.id] || [];
   const datalistId = `contoh-${cat.id}`;
+  const accent = CATEGORY_META[cat.id]?.color || "#8A7A5C";
   return (
     <div className="rab-category" style={{ marginBottom: 24 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span className="icon-badge" style={{ width: 28, height: 28, fontSize: 14, background: (CATEGORY_META[cat.id]?.color || "#8A7A5C") + "16" }}>{CATEGORY_META[cat.id]?.icon}</span>
+          <span className="icon-badge" style={{ width: 28, height: 28, fontSize: 14, background: accent + "16" }}>{CATEGORY_META[cat.id]?.icon}</span>
           <h3 style={{ fontFamily: "'Fraunces'", fontWeight: 600, fontSize: 16, margin: 0 }}>{cat.title}</h3>
           <span style={{
             fontSize: 10.5, fontWeight: 700, padding: "2px 7px", borderRadius: 5,
@@ -1669,14 +1677,30 @@ function CategoryBlock({ cat, rows, subtotalVal, total, onUpdate, onAdd, onRemov
 
       {CATEGORY_TIPS[cat.id] && (
         <div className="no-print" style={{
-          display: "flex", gap: 7, alignItems: "flex-start", fontSize: 11.5, color: "#8A7A5C",
-          background: "#FBF8F2", border: "1px solid #F0EADF", borderRadius: 8, padding: "7px 10px", marginBottom: 10, lineHeight: 1.5,
+          fontSize: 11.5, color: "#8A7A5C",
+          background: "#FBF8F2", border: "1px solid #F0EADF", borderRadius: 8, padding: "8px 10px 9px", marginBottom: 10, lineHeight: 1.5,
         }}>
-          <span style={{ flexShrink: 0 }}>💡</span>
-          <span>
-            <strong style={{ color: "#6B6252" }}>Tips uraian:</strong> {CATEGORY_TIPS[cat.id]}
-            {contoh[0] && <> &nbsp;·&nbsp; <em>cth: “{contoh[0]}”</em></>}
-          </span>
+          <div style={{ display: "flex", gap: 7, alignItems: "flex-start" }}>
+            <span style={{ flexShrink: 0 }}>💡</span>
+            <span><strong style={{ color: "#6B6252" }}>Tips uraian:</strong> {CATEGORY_TIPS[cat.id]}</span>
+          </div>
+          {contoh.length > 0 && (
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 7, paddingLeft: 21 }}>
+              {contoh.map((c) => (
+                <button
+                  key={c} type="button" onClick={() => onUseContoh(c)}
+                  title="Klik untuk mengisi salah satu baris uraian dengan contoh ini"
+                  style={{
+                    fontSize: 11, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", textAlign: "left",
+                    padding: "4px 9px", borderRadius: 20, color: accent, background: accent + "12",
+                    border: `1px solid ${accent}30`, lineHeight: 1.4, transition: "all .15s ease",
+                  }}
+                >
+                  + {c}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -1684,15 +1708,15 @@ function CategoryBlock({ cat, rows, subtotalVal, total, onUpdate, onAdd, onRemov
         <table style={table}>
           <thead>
             <tr>
-              <th style={{ ...th, width: 32 }}>No</th>
-              <th style={{ ...th, textAlign: "left" }}>Uraian</th>
-              <th style={{ ...th, width: 56 }}>Vol</th>
-              <th style={{ ...th, width: 64 }}>Sat</th>
-              <th style={{ ...th, width: 56 }}>Vol2</th>
-              <th style={{ ...th, width: 64 }}>Sat2</th>
-              <th style={{ ...th, width: 130 }}>Harga Satuan (Rp)</th>
-              <th style={{ ...th, width: 130 }}>Jumlah (Rp)</th>
-              <th style={{ ...th, width: 32 }} className="no-print"></th>
+              <th style={{ ...th, width: 32, borderBottomColor: accent }}>No</th>
+              <th style={{ ...th, textAlign: "left", borderBottomColor: accent }}>Uraian</th>
+              <th style={{ ...th, width: 56, borderBottomColor: accent }}>Vol</th>
+              <th style={{ ...th, width: 64, borderBottomColor: accent }}>Sat</th>
+              <th style={{ ...th, width: 56, borderBottomColor: accent }}>Vol2</th>
+              <th style={{ ...th, width: 64, borderBottomColor: accent }}>Sat2</th>
+              <th style={{ ...th, width: 130, borderBottomColor: accent }}>Harga Satuan (Rp)</th>
+              <th style={{ ...th, width: 130, borderBottomColor: accent }}>Jumlah (Rp)</th>
+              <th style={{ ...th, width: 32, borderBottomColor: accent }} className="no-print"></th>
             </tr>
           </thead>
           <tbody>
@@ -1701,12 +1725,19 @@ function CategoryBlock({ cat, rows, subtotalVal, total, onUpdate, onAdd, onRemov
                 {contoh.map((c) => <option key={c} value={c} />)}
               </datalist>
             )}
-            {rows.map((it, idx) => (
+            {rows.map((it, idx) => {
+              const kurangDetail = Number(it.harga) > 0 && (Number(it.vol) || 0) > 0 && isUraianGenerik(cat.id, it.label);
+              return (
               <tr key={it.id} className="rab-row">
                 <td style={td}>{idx + 1}</td>
                 <td style={{ ...td, textAlign: "left" }}>
                   <input style={inputCell} value={it.label} aria-label={`Uraian item ${cat.title}`} list={datalistId}
                     onChange={(e) => onUpdate(it.id, "label", e.target.value)} placeholder={contoh[0] ? `Cth: ${contoh[0]}` : "Uraian item..."} />
+                  {kurangDetail && (
+                    <div className="no-print" style={{ fontSize: 10.5, color: "#B5820A", fontWeight: 600, marginTop: 2, display: "flex", alignItems: "center", gap: 3 }}>
+                      ⚠ Uraian belum spesifik — klik salah satu contoh di atas
+                    </div>
+                  )}
                 </td>
                 <td style={td}>
                   <input style={{ ...inputCell, textAlign: "center" }} type="number" min="0" value={it.vol} aria-label="Vol"
@@ -1743,7 +1774,8 @@ function CategoryBlock({ cat, rows, subtotalVal, total, onUpdate, onAdd, onRemov
                   </div>
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -1780,13 +1812,31 @@ const btnGhost = {
   border: "1.5px solid #E4DCCF", background: "#fff", padding: "7px 13px", borderRadius: 8,
   fontSize: 13, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", color: "#6B6252",
 };
+const btnPrimary = (c) => ({
+  border: "1.5px solid " + c, background: c, padding: "7px 15px", borderRadius: 8,
+  fontSize: 13, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", color: "#fff",
+  boxShadow: "0 3px 10px rgba(0,0,0,.16)",
+});
+// Kartu peringatan (Rekomendasi AI & Telaah Anggaran) — aksen garis kiri berwarna
+// sesuai tingkat urgensi, dipakai bersama agar kedua tab terasa satu bahasa desain.
+const alertCard = (level) => ({
+  display: "flex", gap: 12, alignItems: "flex-start", flexWrap: "wrap",
+  background: level === "error" ? "#FDF2EF" : "#FDF8EC",
+  border: "1px solid " + (level === "error" ? "#F0CFC3" : "#F0E2B8"),
+  borderLeft: "4px solid " + (level === "error" ? "#A23B23" : "#B5820A"),
+  padding: "13px 16px", borderRadius: 10, boxShadow: "0 1px 2px rgba(60,50,30,.05)",
+});
+const alertBadge = (level) => ({
+  fontSize: 11, fontWeight: 800, padding: "3px 8px", borderRadius: 6, marginTop: 1, letterSpacing: .3,
+  background: level === "error" ? "#A23B23" : "#B5820A", color: "#fff", flexShrink: 0,
+});
 const table = { borderCollapse: "collapse", width: "100%", minWidth: 720 };
 const th = {
   fontSize: 11, fontWeight: 700, letterSpacing: .4, textTransform: "uppercase", color: "#8A7A5C",
   textAlign: "center", padding: "6px 6px", borderBottom: "2px solid #E4DCCF",
 };
 const td = {
-  fontSize: 13, textAlign: "center", padding: "4px 6px", borderBottom: "1px solid #F0EADF",
+  fontSize: 13, textAlign: "center", padding: "6px 6px", borderBottom: "1px solid #F0EADF",
 };
 const inputCell = {
   width: "100%", padding: "6px 8px", borderRadius: 6, border: "1.5px solid #E4DCCF",

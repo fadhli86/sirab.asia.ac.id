@@ -865,6 +865,7 @@ export default function App() {
           id: `harga-kosong-${cat.id}`, level: "warn",
           title: `Lengkapi harga satuan pada ${NAMA(cat.id)}`,
           detail: `${kosong.length} item belum memiliki harga satuan.${rerata > 0 ? ` Acuan harga satuan skema ini sekitar ${rupiah(rerata)} per item.` : ""}`,
+          ...(rerata > 0 ? { catId: cat.id, action: "fill-harga", nilai: rerata } : {}),
         });
       }
     }
@@ -880,6 +881,7 @@ export default function App() {
           id: `uraian-detail-${cat.id}`, level: "warn",
           title: `Perjelas uraian item pada ${NAMA(cat.id)}`,
           detail: `${perluDetail.length} item masih kosong/generik (belum menyebut spesifikasi/tujuan). ${CATEGORY_TIPS[cat.id] || ""}${contoh ? ` Contoh uraian detail: “${contoh}”.` : ""}`,
+          ...(contoh ? { catId: cat.id, action: "fill-uraian" } : {}),
         });
       }
     }
@@ -887,9 +889,9 @@ export default function App() {
     return recs;
   }, [subtotal, total, habisPakai, skema, items, skemaId, pagu]);
 
-  // Rekomendasi yang bisa dieksekusi otomatis (punya delta rupiah pasti) — dipakai
-  // oleh tombol "Terapkan Semua". Saran uraian (tanpa catId/delta) tidak disertakan
-  // karena sifatnya panduan penulisan, bukan angka yang bisa langsung diterapkan.
+  // Rekomendasi yang bisa dieksekusi otomatis (punya catId — baik penyesuaian rupiah
+  // maupun aksi isi-otomatis uraian/harga) — dipakai oleh tombol "Terapkan Semua".
+  // Rekomendasi murni informasional (mis. "cut-sisa", perlu tinjauan manual) tidak disertakan.
   const actionableRekomendasi = useMemo(() => rekomendasi.filter((r) => r.catId), [rekomendasi]);
 
   // Menerapkan penyesuaian rupiah dari rekomendasi AI ke item RAB.
@@ -926,8 +928,40 @@ export default function App() {
     }
   };
   const applyRekomendasi = (rec) => {
+    if (rec.action === "fill-uraian") { applyFillUraian(rec.catId); return; }
+    if (rec.action === "fill-harga") { applyFillHarga(rec.catId, rec.nilai); return; }
     if (rec.catId) applyDelta(rec.catId, rec.delta);
     if (rec.pasangan) applyDelta(rec.pasangan.catId, rec.pasangan.delta);
+  };
+
+  // Mengisi otomatis semua uraian yang masih generik pada satu komponen dengan contoh
+  // uraian detail (bergiliran bila item generik lebih banyak dari jumlah contoh yang ada).
+  // Updater murni: penghitung urutan contoh dihitung ulang di dalam closure setiap invokasi.
+  const applyFillUraian = (catId, yearIdx = activeTahun) => {
+    const contohArr = CONTOH_URAIAN[catId] || [];
+    if (!contohArr.length) return;
+    setItemsForYear(yearIdx, (prev) => {
+      let i = 0;
+      const arr = prev[catId].map((it) => {
+        if (Number(it.harga) > 0 && (Number(it.vol) || 0) > 0 && isUraianGenerik(catId, it.label)) {
+          const text = contohArr[i % contohArr.length];
+          i += 1;
+          return { ...it, label: text };
+        }
+        return it;
+      });
+      return { ...prev, [catId]: arr };
+    });
+  };
+
+  // Mengisi otomatis harga satuan yang masih kosong pada satu komponen dengan harga acuan skema.
+  const applyFillHarga = (catId, nilai, yearIdx = activeTahun) => {
+    const bulat = Math.round(nilai);
+    if (!bulat) return;
+    setItemsForYear(yearIdx, (prev) => ({
+      ...prev,
+      [catId]: prev[catId].map((it) => (it.label.trim() && (!it.harga || Number(it.harga) <= 0) ? { ...it, harga: bulat } : it)),
+    }));
   };
 
   const bar = (frac, color) => (
@@ -1601,7 +1635,7 @@ export default function App() {
                   </div>
                   {r.catId && (
                     <button className="btn-ghost" onClick={() => applyRekomendasi(r)} style={{ ...btnGhost, alignSelf: "center", flexShrink: 0 }}>
-                      Terapkan
+                      {r.action === "fill-uraian" ? "Isi Contoh Otomatis" : r.action === "fill-harga" ? "Isi Harga Acuan" : "Terapkan"}
                     </button>
                   )}
                 </div>

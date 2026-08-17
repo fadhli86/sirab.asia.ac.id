@@ -86,6 +86,67 @@ const linkButton = {
   textDecoration: "underline",
 };
 
+// Terjemahan pesan error Supabase Auth yang paling umum ditemui pengguna —
+// selain daftar ini, pesan asli (Inggris) dari Supabase tetap ditampilkan
+// apa adanya daripada menerjemahkan seluruh kemungkinan pesan secara manual.
+const AUTH_ERROR_ID = {
+  "Invalid login credentials": "Email atau password salah.",
+  "User already registered": "Email ini sudah terdaftar. Coba masuk, atau gunakan \"Lupa password?\".",
+  "Email not confirmed": "Email belum dikonfirmasi. Cek inbox Anda untuk link konfirmasi.",
+  "Password should be at least 6 characters": "Password minimal 6 karakter.",
+};
+const translateAuthError = (message) => AUTH_ERROR_ID[message] || message;
+
+function SetNewPasswordForm({ onDone }) {
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setSubmitting(true);
+    try {
+      const { error: updateError } = await supabase.auth.updateUser({ password });
+      if (updateError) throw updateError;
+      onDone();
+    } catch (err) {
+      setError(translateAuthError(err.message) || "Gagal mengganti password, coba lagi.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div style={{
+      minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
+      fontFamily: "'DM Sans', system-ui, sans-serif", background: "#FBF8F2", padding: 24,
+    }}>
+      <form
+        onSubmit={submit}
+        style={{
+          width: "100%", maxWidth: 380, background: "#fff", borderRadius: 16, padding: "28px 26px",
+          boxShadow: "0 1px 3px rgba(60,50,30,.06), 0 8px 24px rgba(60,50,30,.04)", border: "1px solid #F0EADF",
+        }}
+      >
+        <h1 style={{ fontFamily: "'Fraunces', serif", fontSize: 24, margin: "0 0 4px" }}>Atur Password Baru</h1>
+        <p style={{ fontSize: 13, color: "#8A7A5C", margin: 0 }}>
+          Masukkan password baru untuk akun Anda.
+        </p>
+        <label style={label} htmlFor="new-password">Password Baru</label>
+        <input
+          id="new-password" type="password" style={field} value={password}
+          onChange={(e) => setPassword(e.target.value)} required minLength={8} autoComplete="new-password"
+        />
+        {error && <p style={{ color: "#A23B23", fontSize: 12.5, marginTop: 12, marginBottom: 0 }}>{error}</p>}
+        <button type="submit" style={{ ...primaryButton, opacity: submitting ? 0.7 : 1 }} disabled={submitting}>
+          {submitting ? "Menyimpan…" : "Simpan Password Baru"}
+        </button>
+      </form>
+    </div>
+  );
+}
+
 function LoginForm() {
   const [mode, setMode] = useState("login"); // login | signup
   const [email, setEmail] = useState("");
@@ -118,7 +179,7 @@ function LoginForm() {
         if (signInError) throw signInError;
       }
     } catch (err) {
-      setError(err.message || "Terjadi kesalahan, coba lagi.");
+      setError(translateAuthError(err.message) || "Terjadi kesalahan, coba lagi.");
     } finally {
       setSubmitting(false);
     }
@@ -138,7 +199,7 @@ function LoginForm() {
       if (resetError) throw resetError;
       setResetSent(true);
     } catch (err) {
-      setError(err.message || "Gagal mengirim email reset password.");
+      setError(translateAuthError(err.message) || "Gagal mengirim email reset password.");
     } finally {
       setSubmitting(false);
     }
@@ -207,7 +268,7 @@ function LoginForm() {
           <label style={label} htmlFor="auth-password">Password</label>
           <input
             id="auth-password" type="password" style={field} value={password}
-            onChange={(e) => setPassword(e.target.value)} required minLength={6}
+            onChange={(e) => setPassword(e.target.value)} required minLength={mode === "signup" ? 8 : undefined}
             autoComplete={mode === "login" ? "current-password" : "new-password"}
           />
         </div>
@@ -240,10 +301,15 @@ function LoginForm() {
 export default function AuthGate() {
   const [session, setSession] = useState(undefined); // undefined = belum dicek, null = tidak ada sesi
   const [dataState, setDataState] = useState({ status: "idle" });
+  // Klik link "lupa password" dari email membuat Supabase langsung membuat
+  // sesi (PASSWORD_RECOVERY) — kalau tidak ditangani khusus, pengguna akan
+  // langsung masuk ke aplikasi TANPA pernah diminta mengatur password baru.
+  const [recoveryMode, setRecoveryMode] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, newSession) => {
+      if (event === "PASSWORD_RECOVERY") setRecoveryMode(true);
       setSession(newSession);
     });
     return () => sub.subscription.unsubscribe();
@@ -291,6 +357,9 @@ export default function AuthGate() {
 
   if (session === undefined) {
     return <CenteredMessage>Memeriksa sesi login…</CenteredMessage>;
+  }
+  if (recoveryMode) {
+    return <SetNewPasswordForm onDone={() => setRecoveryMode(false)} />;
   }
   if (!session) {
     return <LoginForm />;

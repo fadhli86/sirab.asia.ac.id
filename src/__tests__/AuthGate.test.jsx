@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup, act } from "@testing-library/react";
 
 const authMock = {
   getSession: vi.fn(),
@@ -8,6 +8,7 @@ const authMock = {
   signUp: vi.fn(),
   resetPasswordForEmail: vi.fn(),
   signOut: vi.fn(),
+  updateUser: vi.fn(),
 };
 vi.mock("../lib/supabaseClient.js", () => ({ supabase: { auth: authMock } }));
 
@@ -29,11 +30,17 @@ vi.mock("../../rab-hibah.jsx", () => ({
 
 const AuthGate = (await import("../AuthGate.jsx")).default;
 
+let authStateCallback;
+
 describe("AuthGate", () => {
   beforeEach(() => {
     cleanup();
     vi.clearAllMocks();
-    authMock.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } });
+    authStateCallback = undefined;
+    authMock.onAuthStateChange.mockImplementation((cb) => {
+      authStateCallback = cb;
+      return { data: { subscription: { unsubscribe: vi.fn() } } };
+    });
   });
 
   it("shows the login form when there is no session", async () => {
@@ -91,7 +98,7 @@ describe("AuthGate", () => {
     });
   });
 
-  it("shows a form error message when login fails", async () => {
+  it("shows a translated error message when login fails", async () => {
     authMock.getSession.mockResolvedValue({ data: { session: null } });
     authMock.signInWithPassword.mockResolvedValue({ error: new Error("Invalid login credentials") });
 
@@ -102,6 +109,35 @@ describe("AuthGate", () => {
     fireEvent.change(screen.getByLabelText("Password"), { target: { value: "wrongpass" } });
     fireEvent.click(screen.getByText("Masuk"));
 
-    expect(await screen.findByText("Invalid login credentials")).toBeTruthy();
+    expect(await screen.findByText("Email atau password salah.")).toBeTruthy();
+  });
+
+  it("shows a set-new-password form on a PASSWORD_RECOVERY event, instead of jumping straight into the app", async () => {
+    authMock.getSession.mockResolvedValue({ data: { session: null } });
+    authMock.updateUser.mockResolvedValue({ error: null });
+    dbMock.getOrCreateMyPenelitian.mockResolvedValue({
+      id: "p1", skema_id: "pfr", jumlah_tahun: 1, program_studi: "", nama_ketua: "",
+      pagu_kustom: false, pagu_min_kustom: null, pagu_max_kustom: null,
+    });
+    dbMock.fetchRabItems.mockResolvedValue([]);
+
+    render(<AuthGate />);
+    await screen.findByText("Masuk ke akun Anda");
+
+    const recoverySession = { user: { id: "u1", email: "user@test.com" } };
+    act(() => {
+      authStateCallback("PASSWORD_RECOVERY", recoverySession);
+    });
+
+    expect(await screen.findByText("Atur Password Baru")).toBeTruthy();
+    // Belum boleh langsung masuk ke App tanpa sempat mengganti password —
+    // meskipun data sudah mulai dimuat di latar belakang (session sudah aktif).
+    expect(screen.queryByText(/App dimuat untuk/)).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("Password Baru"), { target: { value: "newpassword123" } });
+    fireEvent.click(screen.getByText("Simpan Password Baru"));
+
+    expect(await screen.findByText("App dimuat untuk user@test.com")).toBeTruthy();
+    expect(authMock.updateUser).toHaveBeenCalledWith({ password: "newpassword123" });
   });
 });

@@ -15,6 +15,7 @@ export default function DashboardRealisasi({ subtotal, totalKeseluruhan, categor
   const [pencairan, setPencairan] = useState([]);
   const [pengeluaran, setPengeluaran] = useState([]);
   const [errorMsg, setErrorMsg] = useState("");
+  const [retryToken, setRetryToken] = useState(0);
 
   useEffect(() => {
     if (!penelitianId) {
@@ -38,7 +39,7 @@ export default function DashboardRealisasi({ subtotal, totalKeseluruhan, categor
     return () => {
       cancelled = true;
     };
-  }, [penelitianId]);
+  }, [penelitianId, retryToken]);
 
   const danaDiterima = useMemo(
     () => pencairan.filter((p) => p.status === "diterima").reduce((a, p) => a + Number(p.nominal || 0), 0),
@@ -56,7 +57,19 @@ export default function DashboardRealisasi({ subtotal, totalKeseluruhan, categor
 
   if (status === "no-session") return null;
   if (status === "loading") return <section style={card}>Memuat data realisasi…</section>;
-  if (status === "error") return <section style={card}>Gagal memuat realisasi: {errorMsg}</section>;
+  if (status === "error") {
+    return (
+      <section style={card}>
+        <p style={{ margin: "0 0 10px" }}>Gagal memuat realisasi: {errorMsg}</p>
+        <button
+          onClick={() => setRetryToken((t) => t + 1)}
+          style={{ border: "1.5px solid #E4DCCF", background: "#fff", padding: "7px 13px", borderRadius: 8, fontSize: 13, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", color: "#6B6252" }}
+        >
+          Coba lagi
+        </button>
+      </section>
+    );
+  }
 
   const maxNilai = Math.max(
     1,

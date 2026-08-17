@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 
 const useSupabaseSessionMock = vi.fn(() => ({ penelitianId: "p1" }));
 vi.mock("../lib/SupabaseSessionContext.jsx", () => ({
@@ -61,6 +61,20 @@ describe("DashboardRealisasi", () => {
     dbMock.listPengeluaran.mockResolvedValue([]);
     renderDashboard();
     expect(await screen.findByText(/Gagal memuat realisasi: db down/)).toBeTruthy();
+  });
+
+  it("clicking Coba lagi after an error re-fetches and can succeed", async () => {
+    dbMock.listPencairan.mockRejectedValueOnce(new Error("db down"));
+    dbMock.listPengeluaran.mockResolvedValueOnce([]);
+    renderDashboard();
+    await screen.findByText(/Gagal memuat realisasi: db down/);
+
+    dbMock.listPencairan.mockResolvedValueOnce([]);
+    dbMock.listPengeluaran.mockResolvedValueOnce([]);
+    fireEvent.click(screen.getByText("Coba lagi"));
+
+    expect(await screen.findByText("Total Anggaran (RAB)")).toBeTruthy();
+    expect(dbMock.listPencairan).toHaveBeenCalledTimes(2);
   });
 
   it("computes Dana Diterima only from tranches marked diterima, Realisasi from all pengeluaran, and Sisa Kas = Dana Diterima - Realisasi", async () => {

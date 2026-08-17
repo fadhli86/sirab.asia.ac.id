@@ -58,6 +58,20 @@ describe("PengeluaranTab", () => {
     expect(await screen.findByText(/Gagal memuat pengeluaran: offline/)).toBeTruthy();
   });
 
+  it("clicking Coba lagi after an error re-fetches and can succeed", async () => {
+    dbMock.listPengeluaran.mockRejectedValueOnce(new Error("offline"));
+    render(<PengeluaranTab />);
+    await screen.findByText(/Gagal memuat pengeluaran: offline/);
+
+    dbMock.listPengeluaran.mockResolvedValueOnce([
+      { id: "e1", kategori: "bahan", uraian: "Reagen", nominal: 1000, tanggal: "", catatan: "" },
+    ]);
+    fireEvent.click(screen.getByText("Coba lagi"));
+
+    expect(await screen.findByDisplayValue("Reagen")).toBeTruthy();
+    expect(dbMock.listPengeluaran).toHaveBeenCalledTimes(2);
+  });
+
   it("adding a row calls addPengeluaran with the first category as default", async () => {
     dbMock.listPengeluaran.mockResolvedValue([]);
     dbMock.addPengeluaran.mockResolvedValue({ id: "e2", kategori: "honor", uraian: "", nominal: 0, tanggal: "", catatan: "" });

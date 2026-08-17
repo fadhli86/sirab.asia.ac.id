@@ -13,6 +13,7 @@ export default function PengeluaranTab({ categories }) {
   const [status, setStatus] = useState("loading");
   const [rows, setRows] = useState([]);
   const [errorMsg, setErrorMsg] = useState("");
+  const [retryToken, setRetryToken] = useState(0);
   const saversRef = useRef(new Map());
 
   useEffect(() => {
@@ -36,7 +37,7 @@ export default function PengeluaranTab({ categories }) {
     return () => {
       cancelled = true;
     };
-  }, [penelitianId]);
+  }, [penelitianId, retryToken]);
 
   const getSaver = (id) => {
     if (!saversRef.current.has(id)) {
@@ -75,7 +76,14 @@ export default function PengeluaranTab({ categories }) {
 
   if (status === "no-session") return <section style={card}>Masuk ke akun Anda untuk melihat pengeluaran.</section>;
   if (status === "loading") return <section style={card}>Memuat data pengeluaran…</section>;
-  if (status === "error") return <section style={card}>Gagal memuat pengeluaran: {errorMsg}</section>;
+  if (status === "error") {
+    return (
+      <section style={card}>
+        <p style={{ margin: "0 0 10px" }}>Gagal memuat pengeluaran: {errorMsg}</p>
+        <button onClick={() => setRetryToken((t) => t + 1)} style={btnGhost}>Coba lagi</button>
+      </section>
+    );
+  }
 
   return (
     <section style={card}>

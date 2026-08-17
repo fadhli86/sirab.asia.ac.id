@@ -14,6 +14,7 @@ export default function PencairanDanaTab() {
   const [status, setStatus] = useState("loading"); // loading | ready | error
   const [rows, setRows] = useState([]);
   const [errorMsg, setErrorMsg] = useState("");
+  const [retryToken, setRetryToken] = useState(0);
   // Satu debounced-saver per baris — supaya edit di baris A tidak menunda
   // atau membatalkan edit yang sedang berjalan di baris B.
   const saversRef = useRef(new Map());
@@ -39,7 +40,7 @@ export default function PencairanDanaTab() {
     return () => {
       cancelled = true;
     };
-  }, [penelitianId]);
+  }, [penelitianId, retryToken]);
 
   const getSaver = (id) => {
     if (!saversRef.current.has(id)) {
@@ -81,7 +82,14 @@ export default function PencairanDanaTab() {
 
   if (status === "no-session") return <section style={card}>Masuk ke akun Anda untuk melihat pencairan dana.</section>;
   if (status === "loading") return <section style={card}>Memuat data pencairan dana…</section>;
-  if (status === "error") return <section style={card}>Gagal memuat pencairan dana: {errorMsg}</section>;
+  if (status === "error") {
+    return (
+      <section style={card}>
+        <p style={{ margin: "0 0 10px" }}>Gagal memuat pencairan dana: {errorMsg}</p>
+        <button onClick={() => setRetryToken((t) => t + 1)} style={btnGhost}>Coba lagi</button>
+      </section>
+    );
+  }
 
   return (
     <section style={card}>

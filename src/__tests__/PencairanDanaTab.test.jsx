@@ -52,6 +52,20 @@ describe("PencairanDanaTab", () => {
     expect(await screen.findByText(/Gagal memuat pencairan dana: offline/)).toBeTruthy();
   });
 
+  it("clicking Coba lagi after an error re-fetches and can succeed", async () => {
+    dbMock.listPencairan.mockRejectedValueOnce(new Error("offline"));
+    render(<PencairanDanaTab />);
+    await screen.findByText(/Gagal memuat pencairan dana: offline/);
+
+    dbMock.listPencairan.mockResolvedValueOnce([
+      { id: "d1", termin: "Dana Awal", persen: 80, nominal: 1000, tanggal: "", status: "menunggu", catatan: "" },
+    ]);
+    fireEvent.click(screen.getByText("Coba lagi"));
+
+    expect(await screen.findByDisplayValue("Dana Awal")).toBeTruthy();
+    expect(dbMock.listPencairan).toHaveBeenCalledTimes(2);
+  });
+
   it("adding a row calls addPencairan and appends the created row", async () => {
     dbMock.listPencairan.mockResolvedValue([]);
     dbMock.addPencairan.mockResolvedValue({ id: "d2", termin: "Termin baru", nominal: 0, status: "menunggu", persen: null, tanggal: "", catatan: "" });

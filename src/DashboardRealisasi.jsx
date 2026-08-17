@@ -100,7 +100,7 @@ export default function DashboardRealisasi({ subtotal, totalKeseluruhan, categor
                   {categoryMeta[cat.id]?.icon} {cat.title.replace(/^\d+\.\s*/, "")}
                 </div>
                 <BarRow label="RAB" value={rencana} max={maxNilai} color="#C9BC9E" text={rupiah(rencana)} />
-                <BarRow label="Realisasi" value={real} max={maxNilai} color={categoryMeta[cat.id]?.color || "#1B5E4F"} text={rupiah(real)} />
+                <BarRow label="Realisasi" value={real} max={maxNilai} color={categoryMeta[cat.id]?.color || "#2D3561"} text={rupiah(real)} />
               </div>
             );
           })}
@@ -110,13 +110,13 @@ export default function DashboardRealisasi({ subtotal, totalKeseluruhan, categor
       <section className="card-hover" style={card}>
         <div style={metricLbl}>Kesehatan Anggaran</div>
         <div style={{
-          background: sisaKas >= 0 ? "#EAF4EF" : "#FDF2EF", borderRadius: 12, padding: "16px 18px",
+          background: sisaKas >= 0 ? "#E6E9F5" : "#FDF2EF", borderRadius: 12, padding: "16px 18px",
           textAlign: "center", marginTop: 10,
         }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: "#8A7A5C", textTransform: "uppercase" }}>
             Sisa Kas (dana di tangan)
           </div>
-          <div style={{ fontFamily: "'Fraunces'", fontWeight: 700, fontSize: 26, color: sisaKas >= 0 ? "#1B5E4F" : "#A23B23" }}>
+          <div style={{ fontFamily: "'Fraunces'", fontWeight: 700, fontSize: 26, color: sisaKas >= 0 ? "#2D3561" : "#A23B23" }}>
             {rupiah(sisaKas)}
           </div>
           <div style={{ fontSize: 11.5, color: "#8A7A5C" }}>Dana Diterima − Realisasi</div>

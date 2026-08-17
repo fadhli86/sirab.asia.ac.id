@@ -68,8 +68,8 @@ const primaryButton = {
   marginTop: 20,
   padding: "11px 16px",
   borderRadius: 8,
-  border: "1.5px solid #1B5E4F",
-  background: "#1B5E4F",
+  border: "1.5px solid #2D3561",
+  background: "#2D3561",
   color: "#fff",
   fontSize: 14,
   fontWeight: 700,
@@ -78,7 +78,7 @@ const primaryButton = {
 const linkButton = {
   background: "none",
   border: "none",
-  color: "#1B5E4F",
+  color: "#2D3561",
   fontSize: 12.5,
   fontWeight: 600,
   cursor: "pointer",
@@ -274,7 +274,7 @@ function LoginForm() {
         </div>
 
         {error && <p style={{ color: "#A23B23", fontSize: 12.5, marginTop: 12, marginBottom: 0 }}>{error}</p>}
-        {resetSent && <p style={{ color: "#1B5E4F", fontSize: 12.5, marginTop: 12, marginBottom: 0 }}>Email reset password terkirim, cek inbox Anda.</p>}
+        {resetSent && <p style={{ color: "#2D3561", fontSize: 12.5, marginTop: 12, marginBottom: 0 }}>Email reset password terkirim, cek inbox Anda.</p>}
 
         <button type="submit" style={{ ...primaryButton, opacity: submitting ? 0.7 : 1 }} disabled={submitting}>
           {submitting ? "Memproses…" : mode === "login" ? "Masuk" : "Daftar"}

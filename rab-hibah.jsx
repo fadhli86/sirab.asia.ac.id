@@ -15,9 +15,9 @@ import DashboardRealisasi from "./src/DashboardRealisasi.jsx";
 // ============================================================
 
 const SUMBER = {
-  diktisaintek: { nama: "Kemdiktisaintek (DPPM)", warna: "#1B5E4F" },
-  brin: { nama: "BRIN", warna: "#7A3E1D" },
-  umum: { nama: "Umum / Lainnya", warna: "#5B5240" },
+  diktisaintek: { nama: "Kemdiktisaintek (DPPM)", warna: "#2D3561" },
+  brin: { nama: "BRIN", warna: "#7A2E42" },
+  umum: { nama: "Umum / Lainnya", warna: "#4A4560" },
 };
 
 // 7 komponen baku RAB penelitian (mengikuti struktur tab Excel resmi)
@@ -34,11 +34,11 @@ const CATEGORIES = [
 
 // Ikon & warna aksen per komponen — dipakai untuk dashboard & tampilan rincian
 const CATEGORY_META = {
-  honor: { icon: "👥", color: "#1B5E4F" },
-  bahan: { icon: "🧪", color: "#3D7A63" },
+  honor: { icon: "👥", color: "#3B4A7D" },
+  bahan: { icon: "🧪", color: "#8C6239" },
   data: { icon: "📊", color: "#2E6B8F" },
   perjalanan: { icon: "🚗", color: "#B5820A" },
-  sewa: { icon: "🏢", color: "#8A6D3B" },
+  sewa: { icon: "🏢", color: "#7A2E42" },
   peralatan: { icon: "🖥️", color: "#7A3E1D" },
   lain: { icon: "📄", color: "#6B4A8A" },
 };
@@ -1034,9 +1034,9 @@ export default function App({ initialRemote, onSync, userEmail, onLogout } = {})
     </div>
   );
 
-  const skorColor = skorRealistis >= 80 ? "#1B5E4F" : skorRealistis >= 55 ? "#B5820A" : "#A23B23";
+  const skorColor = skorRealistis >= 80 ? "#2D3561" : skorRealistis >= 55 ? "#B5820A" : "#A23B23";
   // Varian terang untuk dipakai di atas latar gelap header (kontras cukup di background gradasi)
-  const heroSkorColor = skorRealistis >= 80 ? "#8FE3C0" : skorRealistis >= 55 ? "#F5D68A" : "#F3A08A";
+  const heroSkorColor = skorRealistis >= 80 ? "#AFC0F0" : skorRealistis >= 55 ? "#F5D68A" : "#F3A08A";
 
   return (
     <div style={{
@@ -1058,7 +1058,7 @@ export default function App({ initialRemote, onSync, userEmail, onLogout } = {})
         input[type=range]::-moz-range-thumb{ width:18px; height:18px; border-radius:50%; background:${sumber.warna}; cursor:pointer; border:3px solid #fff; }
         .num-input{ font-variant-numeric: tabular-nums; }
         button:focus-visible, input:focus-visible, select:focus-visible, label:focus-visible {
-          outline: 2px solid #1B5E4F; outline-offset: 2px;
+          outline: 2px solid #2D3561; outline-offset: 2px;
         }
         table{ border-collapse:collapse; width:100%; }
         .grid-2col{ display:grid; grid-template-columns:1.4fr 1fr; gap:24px; }
@@ -1121,7 +1121,7 @@ export default function App({ initialRemote, onSync, userEmail, onLogout } = {})
           <span aria-hidden="true">·</span>
           <button
             type="button" onClick={onLogout}
-            style={{ border: "none", background: "none", color: "#1B5E4F", fontWeight: 700, cursor: "pointer", padding: 0, fontSize: 12, textDecoration: "underline" }}
+            style={{ border: "none", background: "none", color: "#2D3561", fontWeight: 700, cursor: "pointer", padding: 0, fontSize: 12, textDecoration: "underline" }}
           >
             Keluar
           </button>
@@ -1157,7 +1157,7 @@ export default function App({ initialRemote, onSync, userEmail, onLogout } = {})
         }} />
         <div style={{
           position: "absolute", left: 0, right: 0, bottom: 0, height: 3,
-          background: "linear-gradient(90deg, transparent, #E8C97A, #FBF8F2, #E8C97A, transparent)", opacity: .85,
+          background: "linear-gradient(90deg, transparent, #D9B767, #FBF8F2, #D9B767, transparent)", opacity: .85,
         }} />
 
         <div className="hero-row" style={{
@@ -1450,14 +1450,14 @@ export default function App({ initialRemote, onSync, userEmail, onLogout } = {})
             </div>
             <div className="card-hover" style={card}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                <span className="icon-badge" style={{ width: 30, height: 30, fontSize: 14, background: "#1B5E4F16" }}>💰</span>
+                <span className="icon-badge" style={{ width: 30, height: 30, fontSize: 14, background: "#2D356116" }}>💰</span>
                 <div style={{ ...metricLbl, marginBottom: 0 }}>Dana Habis Pakai</div>
               </div>
-              <div style={{ fontFamily: "'Fraunces'", fontWeight: 600, fontSize: 22, color: "#1B5E4F" }}>
+              <div style={{ fontFamily: "'Fraunces'", fontWeight: 600, fontSize: 22, color: "#2D3561" }}>
                 {rupiah(habisPakai)}
               </div>
               <div style={{ fontSize: 12, color: "#8A7A5C", marginBottom: 8 }}>{pct(total > 0 ? habisPakai / total : 0)} dari total</div>
-              {bar(total > 0 ? habisPakai / total : 0, "#1B5E4F")}
+              {bar(total > 0 ? habisPakai / total : 0, "#2D3561")}
             </div>
             <div className="card-hover" style={card}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
@@ -1601,7 +1601,7 @@ export default function App({ initialRemote, onSync, userEmail, onLogout } = {})
                   <div style={{ fontWeight: 700, fontSize: 16 }}>
                     TOTAL RAB {jumlahTahun > 1 ? `TAHUN KE-${yi + 1}` : "RENCANA ANGGARAN BIAYA"}
                   </div>
-                  <div style={{ fontSize: 12, color: totalPerTahun[yi] > pagu.max ? "#A23B23" : totalPerTahun[yi] < pagu.min ? "#B5820A" : "#1B5E4F", fontWeight: 600, marginTop: 2 }}>
+                  <div style={{ fontSize: 12, color: totalPerTahun[yi] > pagu.max ? "#A23B23" : totalPerTahun[yi] < pagu.min ? "#B5820A" : "#2D3561", fontWeight: 600, marginTop: 2 }}>
                     Pagu {paguKustom ? "kustom" : "skema"} (per tahun) {rupiah(pagu.min)} – {rupiah(pagu.max)}
                     {totalPerTahun[yi] > pagu.max ? " · melebihi pagu maksimum" : totalPerTahun[yi] < pagu.min ? " · di bawah pagu minimum" : " · dalam pagu"}
                   </div>
@@ -1707,7 +1707,7 @@ export default function App({ initialRemote, onSync, userEmail, onLogout } = {})
               <button
                 className="no-print"
                 onClick={() => actionableRekomendasi.forEach((r) => applyRekomendasi(r))}
-                style={{ ...btnPrimary("#1B5E4F"), flexShrink: 0 }}
+                style={{ ...btnPrimary("#2D3561"), flexShrink: 0 }}
               >
                 ⚡ Terapkan Semua ({actionableRekomendasi.length})
               </button>
@@ -1715,7 +1715,7 @@ export default function App({ initialRemote, onSync, userEmail, onLogout } = {})
           </div>
           {rekomendasi.length === 0 ? (
             <div style={{
-              background: "#E3F0EA", color: "#1B5E4F", padding: "14px 16px", borderRadius: 10,
+              background: "#E6E9F5", color: "#2D3561", padding: "14px 16px", borderRadius: 10,
               fontWeight: 600, fontSize: 14, display: "flex", gap: 10, alignItems: "center",
             }}>
               ✓ Tidak ada rekomendasi tambahan — alokasi sudah proporsional untuk skema ini.
@@ -1750,7 +1750,7 @@ export default function App({ initialRemote, onSync, userEmail, onLogout } = {})
           </p>
           {validasi.length === 0 ? (
             <div style={{
-              background: "#E3F0EA", color: "#1B5E4F", padding: "14px 16px", borderRadius: 10,
+              background: "#E6E9F5", color: "#2D3561", padding: "14px 16px", borderRadius: 10,
               fontWeight: 600, fontSize: 14, display: "flex", gap: 10, alignItems: "center",
             }}>
               ✓ Semua komponen dalam batas wajar. Anggaran siap ditelaah reviewer.
@@ -1802,8 +1802,8 @@ function CategoryBlock({ cat, rows, subtotalVal, total, onUpdate, onAdd, onRemov
           <h3 style={{ fontFamily: "'Fraunces'", fontWeight: 600, fontSize: 16, margin: 0 }}>{cat.title}</h3>
           <span style={{
             fontSize: 10.5, fontWeight: 700, padding: "2px 7px", borderRadius: 5,
-            background: cat.habisPakai ? "#E3F0EA" : "#F3E3D8",
-            color: cat.habisPakai ? "#1B5E4F" : "#7A3E1D",
+            background: cat.habisPakai ? "#E6E9F5" : "#F3E3D8",
+            color: cat.habisPakai ? "#2D3561" : "#7A3E1D",
           }}>
             {cat.habisPakai ? "HABIS PAKAI" : "ASET"}
           </span>

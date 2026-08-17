@@ -1677,6 +1677,11 @@ export default function App() {
           (SBM Kemenkeu 2026), skema BESTARI, RIKUB, dan program BRIN. Semua nilai bersifat acuan
           perencanaan — selalu verifikasi angka final ke panduan resmi & surat edaran terbaru sebelum submit ke BIMA.
         </p>
+        <p className="no-print" style={{ fontSize: 11.5, color: "#9A9080", textAlign: "center", lineHeight: 1.6, margin: "0 20px 4px" }}>
+          🔒 Seluruh isian di atas hanya disimpan di peramban (browser) perangkat ini — tidak dikirim atau
+          disimpan di server manapun. Hanya satu draft yang tersimpan otomatis; membersihkan cache/data situs
+          pada browser ini akan menghapusnya secara permanen. Unduh CSV/Excel secara berkala sebagai cadangan.
+        </p>
         <p className="print-only" style={{ fontSize: 11, color: "#9A9080", textAlign: "right", margin: "0 20px" }}>
           Dicetak pada {new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}
         </p>
@@ -1883,4 +1888,20 @@ const btnRemove = {
 const btnDuplicate = {
   border: "none", background: "transparent", color: "#8A7A5C", fontSize: 14, fontWeight: 700,
   cursor: "pointer", lineHeight: 1, padding: "2px 6px",
+};
+
+// Fungsi murni (tanpa state React) diekspor terpisah agar bisa diuji unit test
+// tanpa perlu me-render seluruh komponen App.
+export {
+  rupiah,
+  pct,
+  jumlahItem,
+  clampNonNeg,
+  parseCSVText,
+  importItemsFromRows,
+  isUraianGenerik,
+  buildDefaultItems,
+  CATEGORIES,
+  SKEMA,
+  HARGA_ACUAN,
 };

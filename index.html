@@ -13,6 +13,16 @@
     <meta property="og:url" content="https://sirab.asia.ac.id/" />
     <meta name="twitter:card" content="summary" />
     <meta name="robots" content="noindex" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <!--
+      GitHub Pages tidak mendukung custom HTTP response header, jadi hardening
+      yang biasanya lewat header (CSP, clickjacking) ditaruh di meta tag ini.
+      style-src perlu 'unsafe-inline' karena seluruh styling app memakai
+      inline style={{}} React & satu blok <style> — tanpa itu semua tampilan
+      akan rusak total. Tidak ada fetch/gambar/iframe eksternal selain Google
+      Fonts, jadi origin lain sengaja tidak diizinkan.
+    -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none';" />
   </head>
   <body>
     <div id="root"></div>

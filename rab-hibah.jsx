@@ -1,4 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
+import PencairanDanaTab from "./src/PencairanDanaTab.jsx";
+import PengeluaranTab from "./src/PengeluaranTab.jsx";
+import DashboardRealisasi from "./src/DashboardRealisasi.jsx";
 
 // ============================================================
 // DATA REGULASI & TEMPLATE RAB ITEMIZED — diadaptasi dari berkas
@@ -359,7 +362,7 @@ function loadDraft() {
 }
 const initialDraft = loadDraft();
 
-export default function App() {
+export default function App({ initialRemote, onSync, userEmail, onLogout } = {}) {
   const [skemaId, setSkemaId] = useState(initialDraft?.skemaId || "pfr");
   // Model multi tahun — RAB disimpan per tahun pelaksanaan (itemsByTahun[i] = item satu tahun).
   // Draft lama (single-year) tetap kompatibel: dibungkus jadi array 1 tahun.
@@ -395,6 +398,59 @@ export default function App() {
       /* localStorage tidak tersedia — abaikan */
     }
   }, [skemaId, itemsByTahun, jumlahTahun, progStudi, namaKetua, paguKustom, paguMinKustom, paguMaxKustom]);
+
+  // ---- Hidrasi dari akun (Supabase), sekali saat mount ----
+  // `initialRemote` datang dari AuthGate setelah data akun selesai dimuat;
+  // tidak berubah lagi selama komponen ini hidup (AuthGate me-remount App
+  // dari awal kalau sesi berganti), jadi cukup efek sekali-jalan ([] deps).
+  // hydrated tetap true tanpa initialRemote (dipakai standalone/di tes),
+  // supaya efek sinkronisasi di bawah tidak menunggu sesuatu yang tak pernah datang.
+  const [hydrated, setHydrated] = useState(!initialRemote);
+  useEffect(() => {
+    if (!initialRemote) return;
+    const skema = initialRemote.skemaId;
+    const jt = initialRemote.jumlahTahun || 1;
+    if (skema) setSkemaId(skema);
+    if (initialRemote.jumlahTahun) setJumlahTahun(jt);
+    if (initialRemote.itemsByTahun) {
+      setItemsByTahun(initialRemote.itemsByTahun);
+    } else if (skema) {
+      // Belum ada item tersimpan di akun — bangun template default sesuai
+      // skema & durasi dari akun, bukan template lama sisa draft lokal.
+      setItemsByTahun(Array.from({ length: jt }, () => buildDefaultItems(skema)));
+    }
+    if (initialRemote.progStudi !== undefined) setProgStudi(initialRemote.progStudi);
+    if (initialRemote.namaKetua !== undefined) setNamaKetua(initialRemote.namaKetua);
+    if (initialRemote.paguKustom !== undefined) setPaguKustom(initialRemote.paguKustom);
+    if (initialRemote.paguMinKustom !== undefined) setPaguMinKustom(initialRemote.paguMinKustom);
+    if (initialRemote.paguMaxKustom !== undefined) setPaguMaxKustom(initialRemote.paguMaxKustom);
+    setHydrated(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ---- Sinkronisasi ke akun (Supabase), terpisah dari cache localStorage di atas ----
+  // `onSync` (kalau ada) sudah berupa fungsi yang di-debounce oleh AuthGate
+  // (lihat createDebouncedSaver di src/lib/db.js) — App cukup memanggilnya
+  // tiap kali state relevan berubah, sama seperti pola efek localStorage,
+  // tanpa perlu debounce lapis kedua di sini.
+  useEffect(() => {
+    if (!hydrated || !onSync) return;
+    onSync({ skemaId, itemsByTahun, jumlahTahun, progStudi, namaKetua, paguKustom, paguMinKustom, paguMaxKustom });
+  }, [hydrated, onSync, skemaId, itemsByTahun, jumlahTahun, progStudi, namaKetua, paguKustom, paguMinKustom, paguMaxKustom]);
+
+  // Pastikan perubahan terakhir tetap terkirim walau tab ditutup/disembunyikan
+  // sebelum jeda debounce berakhir.
+  useEffect(() => {
+    if (!onSync) return;
+    const handleVisibility = () => {
+      if (document.visibilityState === "hidden") onSync.flush?.();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      onSync.flush?.();
+    };
+  }, [onSync]);
 
   const skema = useMemo(() => SKEMA.find((s) => s.id === skemaId), [skemaId]);
   const sumber = SUMBER[skema.sumber];
@@ -461,6 +517,14 @@ export default function App() {
     [subtotalPerTahun]
   );
   const totalKeseluruhan = useMemo(() => totalPerTahun.reduce((a, b) => a + b, 0), [totalPerTahun]);
+  // Pengeluaran (realisasi) tidak dipecah per tahun pelaksanaan — jadi
+  // pembandingnya adalah rencana per kelompok DIJUMLAHKAN dari semua tahun,
+  // bukan cuma tahun yang sedang aktif di tab Rincian Item.
+  const subtotalKeseluruhan = useMemo(() => {
+    const out = {};
+    for (const cat of CATEGORIES) out[cat.id] = subtotalPerTahun.reduce((a, s) => a + (s[cat.id] || 0), 0);
+    return out;
+  }, [subtotalPerTahun]);
   const habisPakaiPerTahun = useMemo(
     () => subtotalPerTahun.map((s) => CATEGORIES.filter((c) => c.habisPakai).reduce((a, c) => a + s[c.id], 0)),
     [subtotalPerTahun]
@@ -1047,6 +1111,23 @@ export default function App() {
         }
       `}</style>
 
+      {userEmail && (
+        <div className="no-print" style={{
+          maxWidth: 1080, margin: "0 auto", padding: "10px 20px 0",
+          display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 10,
+          fontSize: 12, color: "#8A7A5C",
+        }}>
+          <span>Masuk sebagai <strong style={{ color: "#4A4236" }}>{userEmail}</strong></span>
+          <span aria-hidden="true">·</span>
+          <button
+            type="button" onClick={onLogout}
+            style={{ border: "none", background: "none", color: "#1B5E4F", fontWeight: 700, cursor: "pointer", padding: 0, fontSize: 12, textDecoration: "underline" }}
+          >
+            Keluar
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <header style={{
         position: "relative", overflow: "hidden",
@@ -1299,6 +1380,8 @@ export default function App() {
             {[
               { id: "dashboard", label: "📊 Dashboard" },
               { id: "rincian", label: "📝 Rincian Item" },
+              { id: "pencairan", label: "💵 Pencairan Dana" },
+              { id: "pengeluaran", label: "🧾 Pengeluaran" },
               { id: "rekomendasi", label: `🤖 Rekomendasi AI${rekomendasi.length ? ` (${rekomendasi.length})` : ""}` },
               { id: "telaah", label: `✅ Telaah Anggaran${validasi.length ? ` (${validasi.length})` : ""}` },
             ].map((t) => (
@@ -1431,6 +1514,14 @@ export default function App() {
               </div>
             </div>
           </section>
+
+          {/* Realisasi (Pencairan Dana & Pengeluaran) — dari akun, terpisah dari RAB lokal di atas */}
+          <DashboardRealisasi
+            subtotal={subtotalKeseluruhan}
+            totalKeseluruhan={totalKeseluruhan}
+            categories={CATEGORIES}
+            categoryMeta={CATEGORY_META}
+          />
         </div>
 
         {/* Toolbar */}
@@ -1593,6 +1684,13 @@ export default function App() {
           </div>
         </section>
 
+        {/* Pencairan Dana & Pengeluaran — dimuat (mount) hanya saat tabnya aktif,
+            bukan sekadar disembunyikan lewat CSS seperti tab lain, karena keduanya
+            memanggil useSupabaseSession() (butuh <SupabaseSessionProvider> dari
+            AuthGate) dan mengambil data dari akun saat pertama kali dibuka. */}
+        {activeTab === "pencairan" && <PencairanDanaTab />}
+        {activeTab === "pengeluaran" && <PengeluaranTab categories={CATEGORIES} />}
+
         {/* Rekomendasi AI */}
         <section className={`tab-panel ${activeTab === "rekomendasi" ? "" : "tab-hidden"}`} style={card}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
@@ -1678,9 +1776,10 @@ export default function App() {
           perencanaan — selalu verifikasi angka final ke panduan resmi & surat edaran terbaru sebelum submit ke BIMA.
         </p>
         <p className="no-print" style={{ fontSize: 11.5, color: "#9A9080", textAlign: "center", lineHeight: 1.6, margin: "0 20px 4px" }}>
-          🔒 Seluruh isian di atas hanya disimpan di peramban (browser) perangkat ini — tidak dikirim atau
-          disimpan di server manapun. Hanya satu draft yang tersimpan otomatis; membersihkan cache/data situs
-          pada browser ini akan menghapusnya secara permanen. Unduh CSV/Excel secara berkala sebagai cadangan.
+          🔒 RAB, Pencairan Dana, dan Pengeluaran Anda tersimpan di database akun Anda sendiri — dilindungi
+          Row-Level Security sehingga tidak bisa diakses akun lain. Peramban (browser) ini juga menyimpan
+          salinan lokal sebagai cache agar isian tidak hilang saat koneksi terputus, dan tetap ikut tersinkron
+          begitu koneksi kembali normal.
         </p>
         <p className="print-only" style={{ fontSize: 11, color: "#9A9080", textAlign: "right", margin: "0 20px" }}>
           Dicetak pada {new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}

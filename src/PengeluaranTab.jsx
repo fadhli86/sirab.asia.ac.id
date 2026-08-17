@@ -14,6 +14,7 @@ export default function PengeluaranTab({ categories }) {
   const [rows, setRows] = useState([]);
   const [errorMsg, setErrorMsg] = useState("");
   const [retryToken, setRetryToken] = useState(0);
+  const [saveError, setSaveError] = useState("");
   const saversRef = useRef(new Map());
 
   useEffect(() => {
@@ -41,12 +42,25 @@ export default function PengeluaranTab({ categories }) {
 
   const getSaver = (id) => {
     if (!saversRef.current.has(id)) {
-      saversRef.current.set(id, createDebouncedSaver((patch) => updatePengeluaran(id, patch), 600));
+      saversRef.current.set(
+        id,
+        createDebouncedSaver(
+          (patch) => updatePengeluaran(id, patch),
+          600,
+          (err) => setSaveError("Gagal menyimpan perubahan: " + (err.message || err))
+        )
+      );
     }
     return saversRef.current.get(id);
   };
 
   const updateField = (id, fieldName, value) => {
+    // Cegah nilai negatif langsung saat mengetik — atribut HTML min="0"
+    // tidak benar-benar memblokir input "-", hanya menandai :invalid.
+    if (fieldName === "nominal" && value !== null && value !== "" && Number(value) < 0) {
+      return;
+    }
+    setSaveError("");
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, [fieldName]: value } : r)));
     getSaver(id)({ [fieldName]: value });
   };
@@ -88,6 +102,11 @@ export default function PengeluaranTab({ categories }) {
   return (
     <section style={card}>
       <h2 style={heading}>Pengeluaran</h2>
+      {saveError && (
+        <p style={{ color: "#A23B23", fontSize: 12.5, margin: "0 0 12px", background: "#FDF2EF", border: "1px solid #F0CFC3", borderRadius: 8, padding: "8px 12px" }}>
+          {saveError}
+        </p>
+      )}
       <div style={{ overflowX: "auto" }}>
         <table style={table}>
           <thead>

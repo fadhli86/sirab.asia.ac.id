@@ -11,7 +11,16 @@ const dbMock = {
   addPengeluaran: vi.fn(),
   updatePengeluaran: vi.fn(),
   deletePengeluaran: vi.fn(),
-  createDebouncedSaver: vi.fn((fn) => fn),
+  // Tanpa debounce nyata di test ini (sudah dites di db.test.js), tapi tetap
+  // memanggil onError kalau fn gagal — supaya wiring error-handling di
+  // komponen bisa dites tanpa harus menunggu delay/fake-timer.
+  createDebouncedSaver: vi.fn((fn, _delay, onError) => (...args) => {
+    const result = fn(...args);
+    if (result && typeof result.catch === "function") {
+      result.catch((err) => onError && onError(err));
+    }
+    return result;
+  }),
 };
 vi.mock("../lib/db.js", () => dbMock);
 
@@ -96,6 +105,32 @@ describe("PengeluaranTab", () => {
 
     expect(dbMock.updatePengeluaran).toHaveBeenCalledWith("e1", { nominal: 2500 });
     expect(await screen.findByText(/Total Pengeluaran: Rp 2.500/)).toBeTruthy();
+  });
+
+  it("blocks typing a negative nominal — does not update state or call the saver", async () => {
+    dbMock.listPengeluaran.mockResolvedValue([
+      { id: "e1", kategori: "bahan", uraian: "Reagen", nominal: 1000, tanggal: "", catatan: "" },
+    ]);
+
+    render(<PengeluaranTab />);
+    await screen.findByDisplayValue("Reagen");
+    fireEvent.change(screen.getByLabelText("Nominal"), { target: { value: "-500" } });
+
+    expect(dbMock.updatePengeluaran).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Nominal").value).toBe("1000");
+  });
+
+  it("shows an inline error when a background save fails, instead of failing silently", async () => {
+    dbMock.listPengeluaran.mockResolvedValue([
+      { id: "e1", kategori: "bahan", uraian: "Reagen", nominal: 1000, tanggal: "", catatan: "" },
+    ]);
+    dbMock.updatePengeluaran.mockRejectedValue(new Error("network down"));
+
+    render(<PengeluaranTab />);
+    await screen.findByDisplayValue("Reagen");
+    fireEvent.change(screen.getByLabelText("Uraian"), { target: { value: "Reagen kimia" } });
+
+    expect(await screen.findByText(/Gagal menyimpan perubahan: network down/)).toBeTruthy();
   });
 
   it("removing a row asks for confirmation and calls deletePengeluaran", async () => {

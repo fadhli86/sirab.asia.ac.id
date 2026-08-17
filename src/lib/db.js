@@ -3,7 +3,10 @@ import { supabase } from "./supabaseClient.js";
 // Menjaga maksimal satu request in-flight + satu request pending (dengan
 // argumen TERBARU, bukan antrean semua perubahan) — dipakai baik untuk
 // autosync RAB (App -> onSync) maupun edit field Pencairan Dana/Pengeluaran.
-export function createDebouncedSaver(fn, delayMs = 800) {
+// `onError` (opsional) dipanggil setiap kali `fn` gagal — tanpa ini, gagal
+// simpan akan silent (cuma ke console), jadi komponen UI SEBAIKNYA selalu
+// memberi `onError` supaya penggunanya tahu perubahannya tidak tersimpan.
+export function createDebouncedSaver(fn, delayMs = 800, onError) {
   let timer = null;
   let inFlight = false;
   let lastArgs = null;
@@ -16,6 +19,9 @@ export function createDebouncedSaver(fn, delayMs = 800) {
     pending = false;
     try {
       await fn(...args);
+    } catch (err) {
+      if (onError) onError(err);
+      else console.error("createDebouncedSaver: gagal menyimpan", err);
     } finally {
       inFlight = false;
       if (pending) runNow();

@@ -253,4 +253,27 @@ describe("createDebouncedSaver", () => {
 
     expect(fn).toHaveBeenCalledWith("x");
   });
+
+  it("calls onError when the save rejects, instead of failing silently", async () => {
+    const err = new Error("boom");
+    const fn = vi.fn().mockRejectedValue(err);
+    const onError = vi.fn();
+    const saver = createDebouncedSaver(fn, 100, onError);
+
+    saver("x");
+    await vi.advanceTimersByTimeAsync(100);
+    await vi.waitFor(() => expect(onError).toHaveBeenCalledWith(err));
+  });
+
+  it("without onError, logs the failure instead of throwing an unhandled rejection", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const err = new Error("boom");
+    const fn = vi.fn().mockRejectedValue(err);
+    const saver = createDebouncedSaver(fn, 100);
+
+    saver("x");
+    await vi.advanceTimersByTimeAsync(100);
+    await vi.waitFor(() => expect(consoleSpy).toHaveBeenCalled());
+    consoleSpy.mockRestore();
+  });
 });

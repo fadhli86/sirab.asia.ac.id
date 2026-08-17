@@ -11,7 +11,16 @@ const dbMock = {
   addPencairan: vi.fn(),
   updatePencairan: vi.fn(),
   deletePencairan: vi.fn(),
-  createDebouncedSaver: vi.fn((fn) => fn), // tanpa debounce nyata di test ini — sudah dites di db.test.js
+  // Tanpa debounce nyata di test ini (sudah dites di db.test.js), tapi tetap
+  // memanggil onError kalau fn gagal — supaya wiring error-handling di
+  // komponen bisa dites tanpa harus menunggu delay/fake-timer.
+  createDebouncedSaver: vi.fn((fn, _delay, onError) => (...args) => {
+    const result = fn(...args);
+    if (result && typeof result.catch === "function") {
+      result.catch((err) => onError && onError(err));
+    }
+    return result;
+  }),
 };
 vi.mock("../lib/db.js", () => dbMock);
 
@@ -90,6 +99,44 @@ describe("PencairanDanaTab", () => {
 
     expect(await screen.findByDisplayValue("Dana Tahap 1")).toBeTruthy();
     expect(dbMock.updatePencairan).toHaveBeenCalledWith("d1", { termin: "Dana Tahap 1" });
+  });
+
+  it("blocks typing a negative nominal — does not update state or call the saver", async () => {
+    dbMock.listPencairan.mockResolvedValue([
+      { id: "d1", termin: "Dana Awal", persen: 80, nominal: 1000, tanggal: "", status: "menunggu", catatan: "" },
+    ]);
+
+    render(<PencairanDanaTab />);
+    await screen.findByDisplayValue("Dana Awal");
+    fireEvent.change(screen.getByLabelText("Nominal"), { target: { value: "-500" } });
+
+    expect(dbMock.updatePencairan).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Nominal").value).toBe("1000");
+  });
+
+  it("blocks typing a negative persen the same way", async () => {
+    dbMock.listPencairan.mockResolvedValue([
+      { id: "d1", termin: "Dana Awal", persen: 80, nominal: 1000, tanggal: "", status: "menunggu", catatan: "" },
+    ]);
+
+    render(<PencairanDanaTab />);
+    await screen.findByDisplayValue("Dana Awal");
+    fireEvent.change(screen.getByLabelText("Persen"), { target: { value: "-10" } });
+
+    expect(dbMock.updatePencairan).not.toHaveBeenCalled();
+  });
+
+  it("shows an inline error when a background save fails, instead of failing silently", async () => {
+    dbMock.listPencairan.mockResolvedValue([
+      { id: "d1", termin: "Dana Awal", persen: 80, nominal: 1000, tanggal: "", status: "menunggu", catatan: "" },
+    ]);
+    dbMock.updatePencairan.mockRejectedValue(new Error("network down"));
+
+    render(<PencairanDanaTab />);
+    await screen.findByDisplayValue("Dana Awal");
+    fireEvent.change(screen.getByLabelText("Termin"), { target: { value: "Dana Tahap 1" } });
+
+    expect(await screen.findByText(/Gagal menyimpan perubahan: network down/)).toBeTruthy();
   });
 
   it("removing a row asks for confirmation and calls deletePencairan", async () => {

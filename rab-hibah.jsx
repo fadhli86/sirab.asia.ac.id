@@ -154,11 +154,13 @@ const isUraianGenerik = (catId, label) => {
 // monoton antar baris — total per komponen tetap sama seperti kalibrasi awal.
 const HARGA_ACUAN = {
   pfr: { honor: [1020000, 1020000, 3741000, 194475], bahan: [21000000, 6300000, 14700000], data: [9450000, 4200000, 7350000], perjalanan: [10800000, 7200000], sewa: [4950000, 4050000], peralatan: [12000000], lain: [6600000, 2400000, 3000000] },
+  pdp: { honor: [300000, 300000, 2000000, 70000], bahan: [7000000, 2000000, 5000000], data: [3000000, 1500000, 2500000], perjalanan: [3500000, 2500000], sewa: [1700000, 1300000], peralatan: [4000000], lain: [2000000, 1000000, 1000000] },
   pktp: { honor: [1020000, 1020000, 3741000, 194475], bahan: [18000000, 5400000, 12600000], data: [9450000, 4200000, 7350000], perjalanan: [16200000, 10800000], sewa: [4950000, 4050000], peralatan: [9000000], lain: [6600000, 2400000, 3000000] },
   katalis: { honor: [3401000, 3401000, 12470000, 647650], bahan: [65000000, 19500000, 45500000], data: [31500000, 14000000, 24500000], perjalanan: [36000000, 24000000], sewa: [16500000, 13500000], peralatan: [50000000], lain: [22000000, 8000000, 10000000] },
   terapan: { honor: [1559000, 1559000, 5715000, 296725], bahan: [30000000, 9000000, 21000000], data: [13500000, 6000000, 10500000], perjalanan: [18000000, 12000000], sewa: [11000000, 9000000], peralatan: [35000000], lain: [11000000, 4000000, 5000000] },
   rikub: { honor: [4364000, 4364000, 16003000, 831525], bahan: [84000000, 25200000, 58800000], data: [37800000, 16800000, 29400000], perjalanan: [50400000, 33600000], sewa: [30800000, 25200000], peralatan: [98000000], lain: [30800000, 11200000, 14000000] },
   bestari: { honor: [5951000, 5951000, 21822000, 1133850], bahan: [82500000, 24750000, 57750000], data: [40500000, 18000000, 31500000], perjalanan: [54000000, 36000000], sewa: [24750000, 20250000], peralatan: [90000000], lain: [33000000, 12000000, 15000000] },
+  pkm: { honor: [250000, 250000, 2000000, 50000], bahan: [6000000, 2000000, 4000000], data: [2000000, 1000000, 1000000], perjalanan: [7000000, 5000000], sewa: [1800000, 1200000], peralatan: [5000000], lain: [2000000, 1000000, 1000000] },
   brin_riim: { honor: [3117000, 3117000, 11430000, 594050], bahan: [55000000, 16500000, 38500000], data: [27000000, 12000000, 21000000], perjalanan: [30000000, 20000000], sewa: [22000000, 18000000], peralatan: [90000000], lain: [22000000, 8000000, 10000000] },
   brin_degree: { honor: [2891000, 2891000, 10599000, 550425], bahan: [30000000, 9000000, 21000000], data: [18900000, 8400000, 14700000], perjalanan: [18000000, 12000000], sewa: [9900000, 8100000], peralatan: [24000000], lain: [13200000, 4800000, 6000000] },
   umum: { honor: [0, 0, 0, 0], bahan: [0, 0, 0], data: [0, 0, 0], perjalanan: [0, 0], sewa: [0, 0], peralatan: [0], lain: [0, 0, 0] },
@@ -170,6 +172,12 @@ const SKEMA = [
     id: "pfr", nama: "Penelitian Fundamental Reguler (PFR)", sumber: "diktisaintek",
     tkt: "Dasar · TKT 1–3", paguMin: 20_000_000, paguMax: 150_000_000, durasi: "1–2 thn",
     catatan: "Ketua min. jabatan Lektor & memiliki kepakaran. Luaran artikel jurnal internasional bereputasi.",
+    batas: { honor: 0.25, peralatan: 0.30, perjalanan: 0.30 }, minHabisPakai: 0.60,
+  },
+  {
+    id: "pdp", nama: "Penelitian Dosen Pemula (PDP)", sumber: "diktisaintek",
+    tkt: "Dasar · TKT 1–3", paguMin: 20_000_000, paguMax: 50_000_000, durasi: "1 thn",
+    catatan: "Untuk dosen pemula (ketua & anggota maks. jabatan Lektor, min. 2 anggota, memenuhi ambang SINTA Score, maks. 2× sebagai ketua PDP). Alur: rumusan masalah → data → analisis → temuan → publikasi. Luaran wajib: jurnal nasional terakreditasi/internasional bereputasi. (PDP Afirmasi: skema terpisah, plafon ±Rp30 juta — belum tersedia di sistem ini.)",
     batas: { honor: 0.25, peralatan: 0.30, perjalanan: 0.30 }, minHabisPakai: 0.60,
   },
   {
@@ -201,6 +209,12 @@ const SKEMA = [
     tkt: "Terapan berbasis potensi daerah", paguMin: 250_000_000, paguMax: 750_000_000, durasi: "≤12 bln",
     catatan: "Biaya langsung personil maks 30%. Kolaborasi mitra eksternal & potensi daerah.",
     batas: { honor: 0.30, peralatan: 0.40, perjalanan: 0.30 }, minHabisPakai: 0.45,
+  },
+  {
+    id: "pkm", nama: "Pemberdayaan Kemitraan Masyarakat (PKM)", sumber: "diktisaintek",
+    tkt: "Penerapan Iptek bagi Masyarakat", paguMin: 20_000_000, paguMax: 50_000_000, durasi: "≤8 bln",
+    catatan: "Bukan penelitian akademik — menerapkan iptek untuk mitra nyata (UMKM/komunitas). Alur: kondisi mitra → masalah prioritas → solusi/teknologi diterapkan → pendampingan → pengukuran keberdayaan terukur. Wajib libatkan mahasiswa & mitra nyata; luaran: peningkatan keberdayaan mitra + dokumentasi/publikasi kegiatan.",
+    batas: { honor: 0.25, peralatan: 0.35, perjalanan: 0.35 }, minHabisPakai: 0.50,
   },
   {
     id: "brin_riim", nama: "BRIN — RIIM (Riset & Inovasi untuk Indonesia Maju)", sumber: "brin",
